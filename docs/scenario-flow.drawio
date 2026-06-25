@@ -1,0 +1,355 @@
+<mxfile>
+  <diagram name="시나리오 플로우" id="flow-main">
+    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="2000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ===== 제목 ===== -->
+        <mxCell id="title" value="Mumuk - 시나리오 플로우 다이어그램" style="text;html=1;fontSize=22;fontStyle=1;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="350" y="10" width="700" height="35" />
+        </mxCell>
+        <mxCell id="subtitle" value="사용자 자연어 입력부터 최종 응답까지 전 과정 시각화" style="text;html=1;fontSize=12;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="400" y="45" width="600" height="20" />
+        </mxCell>
+
+        <!-- ===== 시나리오 입력 ===== -->
+        <mxCell id="scenario-input" value="&lt;b&gt;입력 시나리오&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:10px'&gt;&quot;회사 상사랑 점심 먹으려는데,&lt;br&gt;1만원 이하에 1시간 안에 먹을 수 있는&lt;br&gt;조용한 식당 추천해줘&quot;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="240" height="75" />
+        </mxCell>
+        <mxCell id="scenario-note" value="자연어 한 줄 입력으로&lt;br&gt;모든 프로세스 시작" style="text;html=1;fontSize=9;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="155" width="240" height="30" />
+        </mxCell>
+
+        <!-- ===== TIMELINE LINE ===== -->
+        <mxCell id="timeline" value="" style="line;html=1;strokeWidth=3;strokeColor=#cccccc;fillColor=none;align=left;verticalAlign=middle;fontSize=10;fontColor=#999999;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="70" y="195" width="8" height="1280" />
+        </mxCell>
+
+        <!-- Timeline dots -->
+        <mxCell id="dot1" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=#333333;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="195" width="18" height="18" />
+        </mxCell>
+        <mxCell id="dot2" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=#333333;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="390" width="18" height="18" />
+        </mxCell>
+        <mxCell id="dot3" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=#333333;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="590" width="18" height="18" />
+        </mxCell>
+        <mxCell id="dot4" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=#333333;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="790" width="18" height="18" />
+        </mxCell>
+        <mxCell id="dot5" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=#333333;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="1000" width="18" height="18" />
+        </mxCell>
+        <mxCell id="dot6" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=#333333;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="1180" width="18" height="18" />
+        </mxCell>
+        <mxCell id="dot7" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=#333333;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="65" y="1370" width="18" height="18" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- STEP 1: 아리아 (Aria) - 게이트키핑                                  -->
+        <!-- ================================================================ -->
+        <mxCell id="step1-label" value="STEP 1" style="text;html=1;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="220" width="160" height="20" />
+        </mxCell>
+
+        <!-- 슬롯 정의 노트 -->
+        <mxCell id="s1-slot-def" value="&lt;b&gt;슬롯(Slot)이란?&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;&quot;회사 상사랑 점심 1만원 이하..&quot; 같은 자연어 문장에서&lt;br&gt;추출한 &lt;b&gt;구조화된 검색 조건&lt;/b&gt; (예: budget, time, vibe, transportMode 등)&lt;br&gt;→ 모든 슬롯이 채워져야 검색 파이프라인으로 진행&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="820" y="318" width="280" height="42" />
+        </mxCell>
+
+        <mxCell id="step1-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f4fa;strokeColor=#b0c4de;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="215" width="1230" height="150" />
+        </mxCell>
+
+        <mxCell id="s1-aria" value="&lt;b&gt;Aria (Gatekeeper) - 입력 파싱&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="130" y="230" width="180" height="40" />
+        </mxCell>
+
+        <mxCell id="s1-detail" value="&lt;b&gt;동작 상세&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;① parseQueryToSlotsRegex() 실행 → regex 기반 슬롯 추출&lt;br&gt;② LLM API Key 존재 시: Regex + LLM Tool Calling 혼합&lt;br&gt;③ 미래 시제 키워드(&quot;다음주&quot;, &quot;내일&quot;) 감지 → SCHEDULED_MEAL_UNSUPPORTED&lt;br&gt;④ totalTimeMinutes 20~60 범위 검증 → INVALID_TOTAL_TIME&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="360" y="228" width="400" height="85" />
+        </mxCell>
+
+        <mxCell id="s1-result" value="&lt;b&gt;Aria의 출력&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;{&lt;br&gt;  intent: &quot;restaurant_recommendation&quot;,&lt;br&gt;  slots: { partyContext, mealPeriod, budget, time, vibe },&lt;br&gt;  missingFields: [&quot;transportMode&quot;, &quot;excludedFoods&quot;],&lt;br&gt;  flags: { hasFuturePlan: false }&lt;br&gt;}&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="820" y="228" width="240" height="85" />
+        </mxCell>
+
+        <mxCell id="s1-llm-env" value="&lt;b&gt;환경 변수&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;OPENAI_API_KEY&lt;br&gt;GEMINI_API_KEY&lt;br&gt;(없으면 Regex Fallback)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="233" width="180" height="55" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- STEP 2: 오라 (Ora) - 상태 진단 & 루디 호출                         -->
+        <!-- ================================================================ -->
+        <mxCell id="step2-label" value="STEP 2" style="text;html=1;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="20" y="410" width="160" height="20" />
+        </mxCell>
+
+        <mxCell id="step2-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f4fa;strokeColor=#b0c4de;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="405" width="1230" height="160" />
+        </mxCell>
+
+        <mxCell id="s2-ora" value="&lt;b&gt;Ora (Orchestrator) - 상태 진단&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="130" y="420" width="220" height="40" />
+        </mxCell>
+
+        <mxCell id="s2-detail" value="&lt;b&gt;의사 결정&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;missingFields.length = 2 &amp;gt; 0 → &lt;b&gt;Rudy (Dialog Manager) 호출&lt;/b&gt;&lt;br&gt;sessionId 생성: &quot;ses_abc123&quot; (UUID v4)&lt;br&gt;세션 만료 시간 기록: now + 30분&lt;br&gt;SlotPriorityOrder 기준 상위 2개 질문 선정&lt;br&gt;   └ transportMode, excludedFoods 순으로 변환&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="400" y="418" width="380" height="100" />
+        </mxCell>
+
+        <mxCell id="s2-rudy" value="&lt;b&gt;Rudy (Dialog Manager)&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;질문 1: &quot;도보로 갈까요, 차로 갈까요?&quot;&lt;br&gt;질문 2: &quot;피해야 할 음식이 있나요?&quot;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=10;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="840" y="420" width="260" height="55" />
+        </mxCell>
+
+        <mxCell id="s2-response" value="&lt;b&gt;클라이언트 응답&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;status: &quot;questions&quot;&lt;br&gt;sessionId: &quot;ses_abc123&quot;&lt;br&gt;questions: [{ field, label }, ...]&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="420" width="170" height="60" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- STEP 3: 사용자 응답 & 루디 2회차 검증                              -->
+        <!-- ================================================================ -->
+        <mxCell id="step3-label" value="STEP 3" style="text;html=1;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="20" y="610" width="160" height="20" />
+        </mxCell>
+
+        <mxCell id="step3-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0e6f6;strokeColor=#c0a0d0;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="605" width="1230" height="160" />
+        </mxCell>
+
+        <mxCell id="s3-label" value="&lt;b&gt;사용자 응답 제출&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="130" y="620" width="180" height="40" />
+        </mxCell>
+
+        <mxCell id="s3-detail" value="&lt;b&gt;처리 흐름&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;① POST /api/sessions/ses_abc123/answers 로 수신&lt;br&gt;② body: { answers: { transportMode: &quot;walk&quot;, excludedFoods: [] } }&lt;br&gt;③ &lt;b&gt;Rudy 카운트 증가&lt;/b&gt;: turnCount 1 → 2 (최대 2회)&lt;br&gt;④ Aria 재호출: 모든 슬롯 충족 검증&lt;br&gt;⑤ 충족 완료 → Ora가 Data Pipeline 진입 결정&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="360" y="618" width="380" height="100" />
+        </mxCell>
+
+        <mxCell id="s3-warning" value="&lt;b&gt;2회 초과 시&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;turnCount &gt; 2 →&lt;br&gt;SESSION_EXPIRED (410)&lt;br&gt;세션 즉시 폐기&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="820" y="620" width="160" height="60" />
+        </mxCell>
+
+        <mxCell id="s3-session" value="&lt;b&gt;세션 상태&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;{ sessionId, turnCount: 2,&lt;br&gt;  answers: { transportMode,&lt;br&gt;  budget, vibe, ... },&lt;br&gt;  createdAt, expiresAt }&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="620" width="200" height="70" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- STEP 4: 카이 (Kai) & 패스 (Path) - 데이터 파이프라인                -->
+        <!-- ================================================================ -->
+        <mxCell id="step4-label" value="STEP 4" style="text;html=1;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="20" y="810" width="160" height="20" />
+        </mxCell>
+
+        <mxCell id="step4-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0e8;strokeColor=#a0c0a0;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="805" width="1230" height="175" />
+        </mxCell>
+
+        <mxCell id="s4-kai" value="&lt;b&gt;Kai (Scout Master) 실행&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="130" y="820" width="200" height="40" />
+        </mxCell>
+
+        <mxCell id="s4-kai-detail" value="&lt;b&gt;Kai 처리 순서&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;① getSearchRadius(normal, walk) = 1000m&lt;br&gt;② 캐시 조회: nearby:37.4979:127.0276:1000 → MISS&lt;br&gt;③ Kakao Local API 호출: category search&lt;br&gt;④ 응답 정규화: 각 문서 → NormalizedCandidateSchema&lt;br&gt;⑤ 50m 이내 중복 제거&lt;br&gt;⑥ 5개 후보 선정&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="370" y="818" width="320" height="120" />
+        </mxCell>
+
+        <mxCell id="s4-path" value="&lt;b&gt;Path (Route Navigator) 실행&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="740" y="820" width="210" height="40" />
+        </mxCell>
+
+        <mxCell id="s4-path-detail" value="&lt;b&gt;Path 처리 순서&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;① 각 후보별 &lt;b&gt;병렬&lt;/b&gt; 경로 요청&lt;br&gt;② transportMode=walk → Kakao Mobility&lt;br&gt;③ 응답에서 durationMinutes, distanceMeters, path 추출&lt;br&gt;④ mergeCandidateWithRoute() 실행&lt;br&gt;⑤ totalExpectedMinutes = oneWay × 2 + 30 계산&lt;br&gt;⑥ 20~60분 범위 필터링 (범위 밖 → ROUTE_UNAVAILABLE)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="740" y="870" width="320" height="95" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- STEP 4.5: 아이리스 (Iris) - 랭킹                                   -->
+        <!-- ================================================================ -->
+        <mxCell id="step45-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0e8;strokeColor=#a0c0a0;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1000" width="1230" height="155" />
+        </mxCell>
+
+        <mxCell id="step45-label" value="STEP 4.5" style="text;html=1;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1010" width="160" height="20" />
+        </mxCell>
+
+        <mxCell id="s45-iris" value="&lt;b&gt;Iris (Ranker) 실행&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="130" y="1018" width="190" height="40" />
+        </mxCell>
+
+        <mxCell id="s45-score-detail" value="&lt;b&gt;7개 평가 항목&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;Time Fit&lt;/td&gt;&lt;td&gt;25점&lt;/td&gt;&lt;td&gt;60분에 가까울수록 고점&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Distance Fit&lt;/td&gt;&lt;td&gt;20점&lt;/td&gt;&lt;td&gt;거리 대비 시간 효율&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Context Fit&lt;/td&gt;&lt;td&gt;15점&lt;/td&gt;&lt;td&gt;상사/회식 맥락 일치&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Vibe Fit&lt;/td&gt;&lt;td&gt;10점&lt;/td&gt;&lt;td&gt;조용함 ↔ 업종 매칭&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Budget Fit&lt;/td&gt;&lt;td&gt;10점&lt;/td&gt;&lt;td&gt;1만원 이하 가격대&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Metadata&lt;/td&gt;&lt;td&gt;10점&lt;/td&gt;&lt;td&gt;영업시간/평점 존재&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Category Safety&lt;/td&gt;&lt;td&gt;10점&lt;/td&gt;&lt;td&gt;excludedFoods 미포함&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="370" y="1016" width="310" height="130" />
+        </mxCell>
+
+        <mxCell id="s45-result" value="&lt;b&gt;랭킹 결과 예시&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;#1 든든한국밥 (63.5점)&lt;br&gt;  timeFit:17.5 dist:12 context:15&lt;br&gt;  vibe:0 budget:4 meta:10 cat:5&lt;br&gt;&lt;br&gt;#2 깔끔초밥 (63.5점)&lt;br&gt;  동점자 → scoreComponents 비교&lt;br&gt;  timeFit 우선순위로 정렬&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="740" y="1016" width="260" height="110" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- STEP 5: 솔 (Sol) - LLM 내레이션                                    -->
+        <!-- ================================================================ -->
+        <mxCell id="step5-label" value="STEP 5" style="text;html=1;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1200" width="160" height="20" />
+        </mxCell>
+
+        <mxCell id="step5-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fcf0e6;strokeColor=#d0b0a0;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1195" width="1230" height="150" />
+        </mxCell>
+
+        <mxCell id="s5-sol" value="&lt;b&gt;Sol (Narrator) 실행&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="130" y="1210" width="200" height="40" />
+        </mxCell>
+
+        <mxCell id="s5-detail" value="&lt;b&gt;LLM 프롬프트 구성&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;① 각 후보별 개별 프롬프트 생성&lt;br&gt;② &lt;b&gt;좌표 필터링&lt;/b&gt;: location.lat/lng 제거 (프라이버시)&lt;br&gt;③ 사용자 컨텍스트 + 식당 정보를 프롬프트에 주입&lt;br&gt;④ API Key 존재 → OpenAI/Gemini Tool Calling&lt;br&gt;⑤ Key 미존재 → generateGroundedExplanationFallback()&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="380" y="1208" width="350" height="100" />
+        </mxCell>
+
+        <mxCell id="s5-output" value="&lt;b&gt;Sol 출력 결과&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;&quot;든든한국밥은 현재 위치에서 &lt;br&gt;도보 5분 거리(왕복 10분)로,&lt;br&gt;40분이면 충분히 식사 가능합니다.&lt;br&gt;조용한 분위기에서 상사와 함께&lt;br&gt;한식 식사하시기에 적합합니다.&quot;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="790" y="1208" width="250" height="85" />
+        </mxCell>
+
+        <mxCell id="s5-llm" value="&lt;b&gt;LLM Provider&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;OpenAI GPT-4o&lt;br&gt;또는 Gemini Pro&lt;br&gt;(환경변수 설정 시)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="1210" width="160" height="55" />
+        </mxCell>
+
+        <mxCell id="s5-fallback" value="&lt;b&gt;Fallback&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;generateGrounded&lt;br&gt;ExplanationFallback()&lt;br&gt;(규칙 기반 템플릿)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="1280" width="160" height="50" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- STEP 6: 오라 (Ora) - 최종 집계 & 응답                              -->
+        <!-- ================================================================ -->
+        <mxCell id="step6-label" value="STEP 6" style="text;html=1;fontSize=11;fontStyle=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1390" width="160" height="20" />
+        </mxCell>
+
+        <mxCell id="step6-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f4fa;strokeColor=#b0c4de;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1385" width="1230" height="200" />
+        </mxCell>
+
+        <mxCell id="s6-ora" value="&lt;b&gt;Ora (Orchestrator) - 최종 집계&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="130" y="1400" width="220" height="40" />
+        </mxCell>
+
+        <mxCell id="s6-detail" value="&lt;b&gt;최종 응답 조립&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;① Iris 결과 + Sol 설명 병합&lt;br&gt;② ResultsResponseSchema.parse() 검증&lt;br&gt;③ results 배열에 path 좌표 포함 (지도 폴리라인용)&lt;br&gt;④ 세션에 최종 결과 저장&lt;br&gt;⑤ HTTP 200 + JSON 응답 반환&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="400" y="1398" width="320" height="90" />
+        </mxCell>
+
+        <mxCell id="s6-final-json" value="&lt;b&gt;최종 JSON 응답&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;{&lt;br&gt;  status: &quot;results&quot;,&lt;br&gt;  sessionId: &quot;ses_abc123&quot;,&lt;br&gt;  eligibleCount: 5,&lt;br&gt;  results: [{&lt;br&gt;    id, name, category, address,&lt;br&gt;    location: {lat, lng},&lt;br&gt;    transportMode, oneWayRouteMinutes,&lt;br&gt;    totalExpectedMinutes, distanceMeters,&lt;br&gt;    confidenceBadge, reason,&lt;br&gt;    providerAttribution, openStatus,&lt;br&gt;    path: [{lat, lng}, ...] &amp;lt;-- 지도 폴리라인&lt;br&gt;  }]&lt;br&gt;}&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="790" y="1398" width="280" height="175" />
+        </mxCell>
+
+        <mxCell id="s6-client-render" value="&lt;b&gt;클라이언트 렌더링&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;① 상태: results → ResultsList 표시&lt;br&gt;② MapPlaceholder: 네이버 지도 초기화&lt;br&gt;③ 출발지 마커(파랑) + 결과 마커(빨강) 배치&lt;br&gt;④ activeResultIndex=0 → 첫 번째 폴리라인 그림&lt;br&gt;⑤ InfoWindow에 식당명/카테고리 표시&lt;br&gt;⑥ 사용자 클릭 시 activeResultIndex 변경 → 지도 업데이트&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="1400" width="190" height="140" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- 하단: 핵심 제약 조건 요약                                          -->
+        <!-- ================================================================ -->
+        <mxCell id="constraint-box" value="&lt;b&gt;핵심 제약 조건 (Constraints)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f8f8;strokeColor=#cccccc;fontSize=12;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1620" width="1300" height="160" />
+        </mxCell>
+
+        <mxCell id="constraint-1" value="&lt;b&gt;시간 예산&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;totalExpectedMinutes = oneWay × 2 + 30&lt;br&gt;20분 ≤ total ≤ 60분 범위 강제&lt;br&gt;벗어나면 ROUTE_UNAVAILABLE 또는 INVALID_TOTAL_TIME&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1650" width="230" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-2" value="&lt;b&gt;탐색 반경&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;normal+walk → 1km&lt;br&gt;normal+drive → 5km&lt;br&gt;travel+walk → 2km&lt;br&gt;travel+drive → 10km&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="340" y="1650" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-3" value="&lt;b&gt;질문 횟수&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;최대 &lt;b&gt;2회&lt;/b&gt; 초과 시 SESSION_EXPIRED&lt;br&gt;SlotPriorityOrder 순서대로 질문&lt;br&gt;turnCount 서버 측 추적&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="570" y="1650" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-4" value="&lt;b&gt;좌표 프라이버시&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;Sol(LLM) 프롬프트에서&lt;br&gt;location.lat/lng &lt;b&gt;반드시 제거&lt;/b&gt;&lt;br&gt;주소 텍스트만 LLM에 전달&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="800" y="1650" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-5" value="&lt;b&gt;API 정책&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;공식 API Wrapper만 사용&lt;br&gt;스크래핑 금지&lt;br&gt;캐시 TTL 30분&lt;br&gt;PROVIDER_QUOTA 오류 처리&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="1650" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-6" value="&lt;b&gt;기술 스택&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;Vite + Svelte 5 Runes&lt;br&gt;Express + Zod&lt;br&gt;CSS Cascade Layers&lt;br&gt;React/Tailwind/Bootstrap 금지&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1730" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-7" value="&lt;b&gt;LLM 정책&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;Tool Calling만 허용 (LSP/MCP 금지)&lt;br&gt;API Key 없으면 규칙 기반 Fallback&lt;br&gt;좌표 필터링은 필수&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="340" y="1730" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-8" value="&lt;b&gt;상태 관리&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;세션 만료 30분&lt;br&gt;최대 2회 질문-응답&lt;br&gt;initial/questions/results/error&lt;br&gt;클라이언트 Svelte $state runes&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="570" y="1730" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-9" value="&lt;b&gt;MVP 제외&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;로그인/회원가입&lt;br&gt;저장/공유 기능&lt;br&gt;예약 연동&lt;br&gt;과거 이력 / 메모리&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="800" y="1730" width="200" height="70" />
+        </mxCell>
+
+        <mxCell id="constraint-10" value="&lt;b&gt;디자인 시스템&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:9px'&gt;DESIGN.md 시각 규칙 준수&lt;br&gt;모바일 우선 (iPhone 15 Pro 기준)&lt;br&gt;반응형 그리드 (1열/2열)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=10;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="1730" width="200" height="70" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- 화살표 연결                                                         -->
+        <!-- ================================================================ -->
+        <!-- Step 1 → Step 2 -->
+        <mxCell id="arrow-1-2" value="missingFields.length &gt; 0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;fontSize=9;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="365" as="sourcePoint" />
+            <mxPoint x="680" y="405" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Step 2 → Step 3 -->
+        <mxCell id="arrow-2-3" value="질문 응답 제출" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;fontSize=9;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="565" as="sourcePoint" />
+            <mxPoint x="680" y="605" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Step 3 → Step 4 -->
+        <mxCell id="arrow-3-4" value="모든 슬롯 충족 → Data Pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;fontSize=9;strokeColor=#28a745;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="765" as="sourcePoint" />
+            <mxPoint x="680" y="805" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Step 4 → Step 4.5 -->
+        <mxCell id="arrow-4-45" value="Routed Candidates → Iris" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;fontSize=9;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="980" as="sourcePoint" />
+            <mxPoint x="680" y="1000" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Step 4.5 → Step 5 -->
+        <mxCell id="arrow-45-5" value="Sorted Results → Sol" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;fontSize=9;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="1155" as="sourcePoint" />
+            <mxPoint x="680" y="1195" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Step 5 → Step 6 -->
+        <mxCell id="arrow-5-6" value="Explanations → Ora" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;fontSize=9;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="1345" as="sourcePoint" />
+            <mxPoint x="680" y="1385" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Step 6 → Client -->
+        <mxCell id="arrow-6-end" value="HTTP 200 JSON Response → Client Render" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeWidth=2;fontSize=9;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="1585" as="sourcePoint" />
+            <mxPoint x="680" y="1610" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

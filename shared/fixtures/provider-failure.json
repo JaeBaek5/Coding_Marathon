@@ -1,0 +1,5 @@
+{
+  "status": "error",
+  "code": "PROVIDER_ERROR",
+  "message": "카카오 로컬 API 호출에 실패했습니다."
+}

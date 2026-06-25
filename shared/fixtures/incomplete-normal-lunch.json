@@ -1,0 +1,19 @@
+{
+  "status": "questions",
+  "sessionId": "ses_incomplete_lunch_789",
+  "missingFields": ["budgetPerPersonKrw", "transportMode", "vibe"],
+  "questions": [
+    {
+      "field": "budgetPerPersonKrw",
+      "label": "1인 예산은 얼마인가요?"
+    },
+    {
+      "field": "transportMode",
+      "label": "도보로 갈까요, 차로 갈까요?"
+    },
+    {
+      "field": "vibe",
+      "label": "식사 분위기는 어떤가요?"
+    }
+  ]
+}

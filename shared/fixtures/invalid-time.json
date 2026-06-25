@@ -1,0 +1,5 @@
+{
+  "status": "error",
+  "code": "INVALID_TOTAL_TIME",
+  "message": "총 소요시간은 최소 20분에서 최대 60분 사이여야 합니다."
+}

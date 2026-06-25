@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "code": "NO_RESULTS",
+  "message": "설정하신 조건(소요시간, 예산, 제외 음식 등)에 부합하는 식당을 찾을 수 없습니다. 조건을 변경하여 다시 검색해 주세요.",
+  "missingFields": []
+}

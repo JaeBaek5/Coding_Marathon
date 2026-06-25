@@ -1,0 +1,49 @@
+graph TD
+    %% Global Styles
+    classDef step fill:#f0f4fa,stroke:#b0c4de,rx:5,ry:5
+    classDef agent fill:#ffffff,stroke:#333333,rx:5,ry:5
+    classDef process fill:#f8f8f8,stroke:#cccccc,rx:5,ry:5
+    classDef output fill:#d5e8d4,stroke:#82b366,rx:5,ry:5
+
+    subgraph Step1 [STEP 1: 아리아 - 게이트키핑]
+        s1a[Aria - Gatekeeper]:::agent
+        s1d[동작 상세]:::process
+        s1r[Aria의 출력]:::output
+    end
+
+    subgraph Step2 [STEP 2: 오라 - 상태 진단]
+        s2o[Ora - Orchestrator]:::agent
+        s2d[의사 결정]:::process
+        s2r[Rudy - Dialog Manager]:::agent
+    end
+
+    subgraph Step3 [STEP 3: 사용자 응답 & 루디 검증]
+        s3a[사용자 응답 제출]:::agent
+        s3d[처리 흐름]:::process
+    end
+
+    subgraph Step4 [STEP 4: 데이터 파이프라인]
+        s4k[Kai - Scout Master]:::agent
+        s4p[Path - Route Navigator]:::agent
+    end
+
+    subgraph Step45 [STEP 4.5: 아이리스 - 랭킹]
+        s45i[Iris - Ranker]:::agent
+    end
+
+    subgraph Step5 [STEP 5: 솔 - LLM 내레이션]
+        s5s[Sol - Narrator]:::agent
+    end
+
+    subgraph Step6 [STEP 6: 오라 - 최종 집계]
+        s6o[Ora - Orchestrator]:::agent
+        s6f[최종 JSON 응답]:::output
+    end
+
+    %% Connections
+    Step1 --> Step2
+    Step2 --> Step3
+    Step3 --> Step4
+    Step4 --> Step45
+    Step45 --> Step5
+    Step5 --> Step6

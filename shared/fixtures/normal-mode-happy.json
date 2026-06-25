@@ -1,0 +1,53 @@
+{
+  "status": "results",
+  "sessionId": "ses_normal_happy_123",
+  "eligibleCount": 2,
+  "results": [
+    {
+      "id": "place_1",
+      "name": "든든한국밥",
+      "category": "한식",
+      "address": "서울특별시 강남구 역삼동 123-45",
+      "location": {
+        "lat": 37.4981,
+        "lng": 127.0282
+      },
+      "priceLevel": null,
+      "openingHours": null,
+      "rating": null,
+      "reviewCount": null,
+      "reviewSummary": null,
+      "transportMode": "walk",
+      "oneWayRouteMinutes": 5,
+      "totalExpectedMinutes": 40,
+      "distanceMeters": 400,
+      "confidenceBadge": "high",
+      "reason": "현재 위치에서 도보 5분 거리(왕복 10분)로, 예산에 맞으며 한식 국밥으로 상사와 함께 든든하고 빠른 식사에 적합합니다.",
+      "providerAttribution": "Kakao Local / Kakao Mobility",
+      "openStatus": null
+    },
+    {
+      "id": "place_2",
+      "name": "깔끔초밥",
+      "category": "일식",
+      "address": "서울특별시 강남구 역삼동 543-21",
+      "location": {
+        "lat": 37.4965,
+        "lng": 127.0255
+      },
+      "priceLevel": null,
+      "openingHours": null,
+      "rating": null,
+      "reviewCount": null,
+      "reviewSummary": null,
+      "transportMode": "walk",
+      "oneWayRouteMinutes": 8,
+      "totalExpectedMinutes": 46,
+      "distanceMeters": 650,
+      "confidenceBadge": "high",
+      "reason": "도보 8분 거리(왕복 16분)로 조용한 분위기에서 식사하실 수 있어 상사와의 점심 식사로 적합합니다.",
+      "providerAttribution": "Kakao Local / Kakao Mobility",
+      "openStatus": null
+    }
+  ]
+}

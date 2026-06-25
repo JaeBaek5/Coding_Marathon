@@ -1,0 +1,78 @@
+graph TD
+    %% Global Styles
+    classDef layer fill:#eef4fa,stroke:#b0c4de,stroke-width:1px
+    classDef agent fill:#ffffff,stroke:#333333,rx:5,ry:5
+    classDef decision fill:#fff2cc,stroke:#d6b656,shape:diamond
+    classDef api fill:#e1d5e7,stroke:#9673a6,rx:0,ry:0
+    classDef error fill:#f8cecc,stroke:#b85450,rx:5,ry:5
+
+    subgraph L1 [01. 사용자 인터페이스 - Client Layer]
+        user[사용자]:::agent
+        textarea[질문 입력]:::agent
+        map[네이버 지도]:::agent
+        results[결과 리스트]:::agent
+        store[세션 스토어]:::agent
+    end
+
+    subgraph L2 [02. 오케스트레이션 & 게이트키핑]
+        aria[Aria - Gatekeeper]:::agent
+        decSlots{슬롯<br/>충분?}:::decision
+        decFuture{미래<br/>시제?}:::decision
+        errFuture[SCHEDULED_MEAL_UNSUPPORTED]:::error
+        errTime[INVALID_TOTAL_TIME]:::error
+    end
+
+    subgraph L3 [03. 다이얼로그 & 질문 수집]
+        rudy[Rudy - Dialog Manager]:::agent
+        decExpire{2회<br/>초과?}:::decision
+        errExpired[SESSION_EXPIRED]:::error
+        waitUser[클라이언트로 전송]:::agent
+    end
+
+    subgraph L4 [04. 데이터 파이프라인]
+        kai[Kai - Scout Master]:::agent
+        kakaoLocal[Kakao Local API]:::api
+        pathAgent[Path - Route Navigator]:::agent
+        kakaoMobility[Kakao Mobility API]:::api
+        naverDir[Naver Directions API]:::api
+        iris[Iris - Ranker]:::agent
+        pool[후보 풀]:::agent
+    end
+
+    subgraph L5 [05. LLM 내레이션]
+        sol[Sol - Narrator]:::agent
+        coordFilter[좌표 필터]:::agent
+        llm[LLM Provider]:::api
+        fallback[Fallback]:::agent
+    end
+
+    subgraph L6 [06. 최종 집계 & 응답]
+        ora[Ora - Orchestrator]:::agent
+        finalJson[최종 응답]:::agent
+    end
+
+    %% Connections
+    user --> textarea
+    aria --> decSlots
+    decSlots -->|Yes| L3
+    decSlots -->|No| rudy
+    rudy --> decExpire
+    decExpire -->|No| waitUser
+    decExpire -->|Yes| errExpired
+    
+    kai --> kakaoLocal
+    kai --> iris
+    pathAgent --> kakaoMobility
+    pathAgent --> naverDir
+    pool --> iris
+    
+    sol --> coordFilter
+    coordFilter --> llm
+    
+    ora --> finalJson
+
+    %% Cross-layer
+    decSlots -.-> L4
+    iris --> sol
+    sol --> ora
+    finalJson -.-> L1

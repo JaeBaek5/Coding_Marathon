@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "same_name": {
+      "region": [],
+      "keyword": "",
+      "selected_region": ""
+    },
+    "pageable_count": 45,
+    "total_count": 124,
+    "is_end": false
+  },
+  "documents": [
+    {
+      "id": "111111",
+      "place_name": "든든한국밥",
+      "category_name": "음식점 > 한식 > 국밥 > 순대국",
+      "category_group_code": "FD6",
+      "category_group_name": "음식점",
+      "phone": "02-123-4567",
+      "address_name": "서울 강남구 역삼동 123-45",
+      "road_address_name": "서울 강남구 테헤란로 123",
+      "x": "127.0282",
+      "y": "37.4981",
+      "place_url": "http://place.map.kakao.com/111111",
+      "distance": "400"
+    },
+    {
+      "id": "222222",
+      "place_name": "깔끔초밥",
+      "category_name": "음식점 > 일식 > 초밥 > 일식집",
+      "category_group_code": "FD6",
+      "category_group_name": "음식점",
+      "phone": "02-987-6543",
+      "address_name": "서울 강남구 역삼동 543-21",
+      "road_address_name": "서울 강남구 강남대로 543",
+      "x": "127.0255",
+      "y": "37.4965",
+      "place_url": "http://place.map.kakao.com/222222",
+      "distance": "650"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "name": "mumuk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "npm run dev --workspace=client",
+    "dev:server": "npm run dev --workspace=server",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "eslint . --fix && prettier --write .",
+    "test:unit": "vitest run --project client --project server-unit",
+    "test:contract": "vitest run --project server-contract",
+    "test:integration": "vitest run --project server-integration",
+    "test:e2e": "playwright test",
+    "smoke": "playwright test tests-e2e/smoke.spec.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.43.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.0.0",
+    "eslint-plugin-svelte": "^2.35.1",
+    "globals": "^15.0.0",
+    "jsdom": "^24.0.0",
+    "prettier": "^3.2.5",
+    "supertest": "^6.3.4",
+    "vitest": "^4.1.9",
+    "zod": "^4.4.3"
+  },
+  "dependencies": {
+    "vite": "8.0.16"
+  }
+}

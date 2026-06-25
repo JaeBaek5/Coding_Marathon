@@ -1,0 +1,13 @@
+{
+  "id": "place123",
+  "name": "테스트 식당",
+  "category": "한식",
+  "address": "서울시 강남구 테헤란로 123",
+  "transportMode": "walk",
+  "oneWayRouteMinutes": 10,
+  "totalExpectedMinutes": 50,
+  "distanceMeters": 800,
+  "openStatus": null,
+  "confidenceBadge": "medium",
+  "providerAttribution": "Kakao"
+}

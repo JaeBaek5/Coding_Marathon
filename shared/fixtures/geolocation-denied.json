@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "code": "GEO_REQUIRED",
+  "message": "현재 위치 기반 추천을 위해서는 위치 권한 승인이 필요합니다. 권한을 허용하시거나 출장/여행 모드를 이용해 주세요.",
+  "missingFields": []
+}
