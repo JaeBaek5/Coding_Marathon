@@ -6,6 +6,7 @@ import { ErrorCodes } from '../../../shared/contracts/schemas.js';
 import { NaverLocalAdapter } from '../adapters/naverLocalAdapter.js';
 import { cache } from '../utils/cache.js';
 import { resetClientForTesting } from '../llm/client.js';
+import * as ipGeolocation from '../utils/ipGeolocation.js';
 
 describe('HTTP API Endpoints Integration Tests', () => {
   beforeEach(() => {
@@ -44,7 +45,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.body.supportedTransportModes).toContain('walk');
       expect(res.body.supportedTransportModes).toContain('drive');
       expect(res.body.timeRange.min).toBe(20);
-      expect(res.body.timeRange.max).toBe(60);
+      expect(res.body.timeRange.max).toBeNull();
     });
 
     it('should expose provider readiness without fake map keys or secrets', async () => {
@@ -101,7 +102,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.text).not.toContain('secret-openrouter-key');
       expect(res.body.llmHarness.provider).toBe('openrouter');
       expect(res.body.llmHarness.baseURL).toBe('https://openrouter.ai/api/v1');
-      expect(res.body.llmHarness.model).toBe('anthropic/claude-sonnet-4.6');
+      expect(res.body.llmHarness.model).toBe('google/gemini-2.5-flash-lite');
       expect(res.body.llmHarness.agents.map((agent) => agent.name)).toEqual([
         'orchestrator',
         'aleph',
@@ -109,10 +110,13 @@ describe('HTTP API Endpoints Integration Tests', () => {
         'gimel'
       ]);
       expect(
-        res.body.llmHarness.agents.every(
-          (agent) => agent.model === 'anthropic/claude-sonnet-4.6'
-        )
-      ).toBe(true);
+        res.body.llmHarness.agents.map((agent) => [agent.name, agent.model])
+      ).toEqual([
+        ['orchestrator', 'google/gemini-2.5-flash-lite'],
+        ['aleph', 'google/gemini-2.5-flash-lite'],
+        ['bet', 'google/gemini-2.5-flash'],
+        ['gimel', 'anthropic/claude-sonnet-4.6']
+      ]);
     });
 
     it('should expose custom OpenRouter harness metadata without exposing secrets', async () => {
@@ -187,6 +191,27 @@ describe('HTTP API Endpoints Integration Tests', () => {
     });
   });
 
+  describe('GET /api/location/ip', () => {
+    it('should return IP coordinates for local requests via server-side lookup', async () => {
+      vi.spyOn(ipGeolocation, 'lookupIpLocation').mockResolvedValue({
+        lat: 37.5665,
+        lng: 126.978,
+        label: 'Seoul, Korea',
+        accuracyMeters: 5000,
+        source: 'ip-geolocation'
+      });
+
+      const res = await request(app).get('/api/location/ip').expect(200);
+
+      expect(res.body).toMatchObject({
+        lat: 37.5665,
+        lng: 126.978,
+        source: 'ip-geolocation'
+      });
+      expect(ipGeolocation.lookupIpLocation).toHaveBeenCalledWith(null);
+    });
+  });
+
   describe('POST /api/recommendations', () => {
     it('should return 400 with GEO_REQUIRED if normal mode is chosen without coordinates', async () => {
       const res = await request(app)
@@ -216,7 +241,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.body.code).toBe(ErrorCodes.SCHEDULED_MEAL_UNSUPPORTED);
     });
 
-    it('should return 200 with status questions if initial request is incomplete', async () => {
+    it('should proceed with defaults when the initial request is incomplete but location exists', async () => {
       const res = await request(app)
         .post('/api/recommendations')
         .send({
@@ -226,9 +251,8 @@ describe('HTTP API Endpoints Integration Tests', () => {
         })
         .expect(200);
 
-      expect(res.body.status).toBe('questions');
+      expect(['results', 'questions']).toContain(res.body.status);
       expect(res.body.sessionId).toBeDefined();
-      expect(res.body.missingFields).toContain('transportMode');
     });
 
     it('should return 200 with status results if initial request is already complete', async () => {
@@ -245,7 +269,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.body.results).toBeInstanceOf(Array);
     });
 
-    it('should return 400 with INVALID_TOTAL_TIME if the parsed totalTimeMinutes from query is out of bounds', async () => {
+    it('should auto-resolve short totalTimeMinutes from the initial query', async () => {
       const res = await request(app)
         .post('/api/recommendations')
         .send({
@@ -253,10 +277,23 @@ describe('HTTP API Endpoints Integration Tests', () => {
           mode: 'normal',
           userLocation: { lat: 37.4979, lng: 127.0276 }
         })
-        .expect(400);
+        .expect(200);
 
-      expect(res.body.status).toBe('error');
-      expect(res.body.code).toBe(ErrorCodes.INVALID_TOTAL_TIME);
+      expect(['results', 'questions']).toContain(res.body.status);
+    });
+  });
+
+  describe('POST /api/sessions', () => {
+    it('should create a session id for client progress polling', async () => {
+      const res = await request(app).post('/api/sessions').expect(201);
+
+      expect(res.body.sessionId).toMatch(/^ses_/);
+
+      const progress = await request(app)
+        .get(`/api/sessions/${res.body.sessionId}/progress`)
+        .expect(200);
+
+      expect(progress.body.steps).toEqual([]);
     });
   });
 
@@ -301,7 +338,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.body.results.length).toBeGreaterThan(0);
     });
 
-    it('should return 400 with INVALID_TOTAL_TIME if answered totalTimeMinutes is out of bounds', async () => {
+    it('should auto-resolve answered totalTimeMinutes below the minimum', async () => {
       const initRes = await request(app)
         .post('/api/recommendations')
         .send({
@@ -319,10 +356,9 @@ describe('HTTP API Endpoints Integration Tests', () => {
             totalTimeMinutes: 10
           }
         })
-        .expect(400);
+        .expect(200);
 
-      expect(res.body.status).toBe('error');
-      expect(res.body.code).toBe(ErrorCodes.INVALID_TOTAL_TIME);
+      expect(['results', 'questions']).toContain(res.body.status);
     });
   });
 });

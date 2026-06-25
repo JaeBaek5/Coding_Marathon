@@ -9,7 +9,16 @@ import {
   getAgentHarness
 } from '../../llm/client.js';
 import { logger, logAgentHop } from '../../utils/logger.js';
+import { setSessionProgress } from '../../services/sessionProgress.js';
 import { extractNaverReviews } from '../../tools/naverReviewExtractor.js';
+import { mapWithConcurrencyLimit } from '../../utils/concurrency.js';
+import {
+  FAST_MODE,
+  GIMEL_LLM_CANDIDATE_LIMIT_FAST,
+  GIMEL_LLM_TIMEOUT_MS
+} from '../../config/performance.js';
+
+export const DEFAULT_GIMEL_CONCURRENCY = 5;
 
 const SCRAPE_REVIEWS_TOOL = {
   type: 'function',
@@ -178,6 +187,41 @@ export function createGroundedFallbackReason(candidate, scraped) {
   return parts.join(' ');
 }
 
+async function runReasonFromPreloadedReviews(
+  candidate,
+  scraped,
+  createChatCompletion
+) {
+  const sanitizedCandidate = sanitizeCandidateForPrompt(candidate);
+  const completion = await createChatCompletion('gimel', {
+    messages: [
+      {
+        role: 'user',
+        content: JSON.stringify({
+          task: 'Generate one grounded Korean recommendation reason for this restaurant.',
+          candidate: sanitizedCandidate,
+          scrapedReviews: {
+            rating: scraped.rating ?? null,
+            reviewCount: scraped.reviewCount ?? null,
+            reviewSummary: scraped.reviewSummary ?? null,
+            reviewSnippets: scraped.reviewSnippets ?? [],
+            reviews: (scraped.reviews ?? []).slice(0, 5)
+          },
+          instruction:
+            'Use only scrapedReviews and candidate facts. Mention a concrete positive from reviews when available.'
+        })
+      }
+    ],
+    response_format: zodResponseFormat(GimelReasonOutputSchema, 'gimel_reasons')
+  });
+
+  return {
+    scraped,
+    parsed: completion.choices[0].message.parsed,
+    sanitizedCandidate
+  };
+}
+
 async function runReasonToolLoop(
   candidate,
   tools,
@@ -293,7 +337,108 @@ export class GimelAgent {
     };
   }
 
-  async generateReasons(candidates) {
+  async generateReasonForCandidate(
+    candidate,
+    llmRuntime,
+    sessionId,
+    index,
+    total
+  ) {
+    const position = `${index + 1}/${total}`;
+    const detailParts = [position];
+    if (typeof candidate.category === 'string' && candidate.category.trim()) {
+      detailParts.push(candidate.category.trim());
+    }
+    if (typeof candidate.rating === 'number') {
+      detailParts.push(`${candidate.rating}점`);
+    }
+    if (typeof candidate.reviewCount === 'number' && candidate.reviewCount > 0) {
+      detailParts.push(`리뷰 ${candidate.reviewCount.toLocaleString('ko-KR')}건`);
+    }
+    if (typeof candidate.travelTimeMinutes === 'number') {
+      detailParts.push(`이동 ${candidate.travelTimeMinutes}분`);
+    }
+
+    if (sessionId) {
+      setSessionProgress(sessionId, {
+        phase: 'gimel_candidate',
+        message: `추천 이유 생성 중: ${candidate.name}`,
+        detail: detailParts.join(' · ')
+      });
+    }
+
+    let reason = createGroundedFallbackReason(
+      sanitizeCandidateForPrompt(candidate),
+      candidate.reviewExtraction || createToolError('LLM unavailable')
+    );
+
+    if (llmRuntime) {
+      logAgentHop(this.dependencies.logger, {
+        fromAgent: 'gimel',
+        toAgent: 'llm',
+        phase: 'reason_generation',
+        candidateId: candidate.id,
+        model: llmRuntime.model
+      });
+
+      const preloaded = candidate.reviewExtraction;
+      const hasPreloadedReviews =
+        Array.isArray(preloaded?.reviews) && preloaded.reviews.length > 0;
+
+      const { parsed, scraped } = hasPreloadedReviews
+        ? await runReasonFromPreloadedReviews(
+            candidate,
+            preloaded,
+            this.dependencies.createAgentChatCompletion
+          )
+        : await runReasonToolLoop(
+            candidate,
+            this.dependencies.tools,
+            this.dependencies.scrapeReviews,
+            this.dependencies.createAgentChatCompletion
+          );
+
+      const llmReason = parsed?.reasons?.find(
+        (item) => item.id === candidate.id
+      )?.reason;
+
+      if (validateReasonAgainstScrape(llmReason, scraped)) {
+        reason = llmReason;
+        this.dependencies.logger.info('Gimel accepted LLM reason', {
+          event: 'gimel_reason_accepted',
+          candidateId: candidate.id,
+          scrapedProvider: scraped.provider,
+          hasRating: typeof scraped.rating === 'number',
+          hasReviewCount: typeof scraped.reviewCount === 'number',
+          snippetCount: scraped.reviewSnippets?.length ?? 0
+        });
+      } else {
+        reason = createGroundedFallbackReason(
+          sanitizeCandidateForPrompt(candidate),
+          scraped
+        );
+        this.dependencies.logger.warn('Gimel fell back to deterministic reason', {
+          event: 'gimel_reason_fallback',
+          candidateId: candidate.id,
+          scrapeError: scraped.error,
+          snippetCount: scraped.reviewSnippets?.length ?? 0
+        });
+      }
+    } else {
+      this.dependencies.logger.warn('Gimel used deterministic fallback without LLM', {
+        event: 'gimel_reason_no_llm',
+        candidateId: candidate.id
+      });
+    }
+
+    return {
+      ...candidate,
+      reason
+    };
+  }
+
+  async generateReasons(candidates, options = {}) {
+    const { sessionId = null } = options;
     let llmRuntime = null;
 
     try {
@@ -302,79 +447,78 @@ export class GimelAgent {
       llmRuntime = null;
     }
 
-    const results = [];
+    const llmCandidateLimit = FAST_MODE
+      ? GIMEL_LLM_CANDIDATE_LIMIT_FAST
+      : candidates.length;
 
     this.dependencies.logger.info('Gimel reason generation started', {
       event: 'gimel_generation_started',
       candidateCount: candidates.length,
-      llmAvailable: Boolean(llmRuntime)
+      llmAvailable: Boolean(llmRuntime),
+      fastMode: FAST_MODE,
+      llmCandidateLimit
     });
 
-    for (const candidate of candidates) {
-      let reason = createGroundedFallbackReason(
-        sanitizeCandidateForPrompt(candidate),
-        createToolError('LLM unavailable')
-      );
-
-      if (llmRuntime) {
-        logAgentHop(this.dependencies.logger, {
-          fromAgent: 'gimel',
-          toAgent: 'llm',
-          phase: 'reason_generation',
-          candidateId: candidate.id,
-          model: llmRuntime.model
-        });
-        const { parsed, scraped } = await runReasonToolLoop(
-          candidate,
-          this.dependencies.tools,
-          this.dependencies.scrapeReviews,
-          this.dependencies.createAgentChatCompletion
-        );
-
-        const llmReason = parsed?.reasons?.find(
-          (item) => item.id === candidate.id
-        )?.reason;
-
-        if (validateReasonAgainstScrape(llmReason, scraped)) {
-          reason = llmReason;
-          this.dependencies.logger.info('Gimel accepted LLM reason', {
-            event: 'gimel_reason_accepted',
-            candidateId: candidate.id,
-            scrapedProvider: scraped.provider,
-            hasRating: typeof scraped.rating === 'number',
-            hasReviewCount: typeof scraped.reviewCount === 'number',
-            snippetCount: scraped.reviewSnippets?.length ?? 0
-          });
-        } else {
-          reason = createGroundedFallbackReason(
-            sanitizeCandidateForPrompt(candidate),
-            scraped
-          );
-          this.dependencies.logger.warn(
-            'Gimel fell back to deterministic reason',
-            {
-              event: 'gimel_reason_fallback',
-              candidateId: candidate.id,
-              scrapeError: scraped.error,
-              snippetCount: scraped.reviewSnippets?.length ?? 0
-            }
-          );
+    const results = await mapWithConcurrencyLimit(
+      candidates,
+      FAST_MODE ? candidates.length : DEFAULT_GIMEL_CONCURRENCY,
+      async (candidate, index) => {
+        const useLlm = Boolean(llmRuntime) && index < llmCandidateLimit;
+        if (!useLlm) {
+          return {
+            ...candidate,
+            reason: createGroundedFallbackReason(
+              sanitizeCandidateForPrompt(candidate),
+              candidate.reviewExtraction || createToolError('fast_mode_skip_llm')
+            )
+          };
         }
-      } else {
-        this.dependencies.logger.warn(
-          'Gimel used deterministic fallback without LLM',
-          {
-            event: 'gimel_reason_no_llm',
-            candidateId: candidate.id
+
+        if (FAST_MODE) {
+          try {
+            return await Promise.race([
+              this.generateReasonForCandidate(
+                candidate,
+                llmRuntime,
+                sessionId,
+                index,
+                candidates.length
+              ),
+              new Promise((resolve) =>
+                setTimeout(
+                  () =>
+                    resolve({
+                      ...candidate,
+                      reason: createGroundedFallbackReason(
+                        sanitizeCandidateForPrompt(candidate),
+                        candidate.reviewExtraction ||
+                          createToolError('gimel_timeout')
+                      )
+                    }),
+                  GIMEL_LLM_TIMEOUT_MS
+                )
+              )
+            ]);
+          } catch {
+            return {
+              ...candidate,
+              reason: createGroundedFallbackReason(
+                sanitizeCandidateForPrompt(candidate),
+                candidate.reviewExtraction || createToolError('gimel_error')
+              )
+            };
           }
+        }
+
+        return this.generateReasonForCandidate(
+          candidate,
+          llmRuntime,
+          sessionId,
+          index,
+          candidates.length
         );
       }
-
-      results.push({
-        ...candidate,
-        reason
-      });
-    }
+    );
 
     this.dependencies.logger.info('Gimel reason generation completed', {
       event: 'gimel_generation_completed',

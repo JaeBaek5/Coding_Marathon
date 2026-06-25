@@ -1,4 +1,5 @@
 import { getPublicHarnessConfig } from '../llm/client.js';
+import { TOTAL_TIME_MIN_MINUTES } from '../../../shared/contracts/schemas.js';
 
 function hasValue(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -41,7 +42,7 @@ export function getPublicConfig(env = process.env) {
     providerReadiness,
     defaultLocale: 'ko-KR',
     supportedTransportModes: ['walk', 'drive'],
-    timeRange: { min: 20, max: 60 },
+    timeRange: { min: TOTAL_TIME_MIN_MINUTES, max: null },
     llmHarness
   };
 }

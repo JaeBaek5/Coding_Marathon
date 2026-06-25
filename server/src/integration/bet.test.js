@@ -76,7 +76,8 @@ describe('Bet Agent Integration', () => {
 
     const result = await agent.search(createSlots(), {
       routeConcurrency: 2,
-      now: '2026-05-20T12:00:00+09:00'
+      now: '2026-05-20T12:00:00+09:00',
+      fastMode: false
     });
 
     expect(result.status).toBe('results');
@@ -134,7 +135,7 @@ describe('Bet Agent Integration', () => {
     expect(result.eligibleCount).toBe(3);
   });
 
-  it('excludes cafe and bar candidates by default when no explicit intent present', async () => {
+  it('ranks cafe and bar candidates lower by default when no explicit intent present', async () => {
     const logger = createLogger();
     const agent = new BetAgent({
       searchNearbyCandidates: vi.fn().mockResolvedValue([
@@ -153,9 +154,9 @@ describe('Bet Agent Integration', () => {
 
     expect(result.status).toBe('results');
     const ids = result.results.map((c) => c.id);
-    expect(ids).not.toContain('cafe-1');
-    expect(ids).not.toContain('bar-1');
-    expect(ids).toContain('rest-1');
+    expect(ids[0]).toBe('rest-1');
+    expect(ids).toContain('cafe-1');
+    expect(ids).toContain('bar-1');
   });
 
   it('includes cafes when the slot venuePreference is cafe', async () => {
@@ -220,7 +221,8 @@ describe('Bet Agent Integration', () => {
 
     const result = await agent.search(createSlots(), {
       routeCandidateLimit: 25,
-      now: '2026-05-20T12:00:00+09:00'
+      now: '2026-05-20T12:00:00+09:00',
+      fastMode: false
     });
 
     expect(result.status).toBe('results');

@@ -3,20 +3,23 @@ import {
   rankCandidates,
   validateTimeBudget,
   isWithinServiceWindow,
+  computeTotalExpectedMinutes,
+  isWithinTimeBudget,
   RankingValidationError
 } from '../../services/ranking.js';
 
 describe('Ranking and Time-Budget Scoring Engine', () => {
   describe('Time Limit Validation', () => {
-    it('should pass if totalTimeMinutes is between 20 and 60 inclusive', () => {
+    it('should pass if totalTimeMinutes is at least 20 with no upper limit', () => {
       expect(() => validateTimeBudget(20)).not.toThrow();
       expect(() => validateTimeBudget(45)).not.toThrow();
-      expect(() => validateTimeBudget(60)).not.toThrow();
+      expect(() => validateTimeBudget(240)).not.toThrow();
+      expect(() => validateTimeBudget(480)).not.toThrow();
+      expect(() => validateTimeBudget(1440)).not.toThrow();
     });
 
-    it('should reject with INVALID_TOTAL_TIME if totalTimeMinutes is less than 20 or greater than 60', () => {
+    it('should reject with INVALID_TOTAL_TIME if totalTimeMinutes is less than 20', () => {
       expect(() => validateTimeBudget(19)).toThrow(RankingValidationError);
-      expect(() => validateTimeBudget(61)).toThrow(RankingValidationError);
       expect(() => validateTimeBudget(null)).toThrow(RankingValidationError);
     });
   });
@@ -74,7 +77,7 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
     });
   });
 
-  describe('Hard Filters', () => {
+  describe('Ranking penalties (no hard exclusion)', () => {
     const baseSlot = {
       totalTimeMinutes: 45,
       transportMode: 'walk',
@@ -117,13 +120,11 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       expect(results[0].id).toBe('1');
     });
 
-    it('should exclude candidates whose totalExpectedMinutes exceeds user limit', () => {
-      // For route = 10, totalExpectedMinutes = 10 * 2 + 30 = 50. Limit is 45. Excluded.
-      // For route = 5, totalExpectedMinutes = 5 * 2 + 30 = 40. Limit is 45. Kept.
+    it('should rank all routed candidates when totalTimeMinutes is only 30', () => {
       const candidates = [
         {
           id: '1',
-          name: 'In Time',
+          name: 'Nearby',
           category: '한식',
           address: 'Address 1',
           oneWayRouteMinutes: 5,
@@ -131,20 +132,55 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
         },
         {
           id: '2',
+          name: 'Too Far',
+          category: '한식',
+          address: 'Address 2',
+          oneWayRouteMinutes: 16,
+          distanceMeters: 1200
+        }
+      ];
+
+      const results = rankCandidates(candidates, {
+        ...baseSlot,
+        totalTimeMinutes: 30
+      });
+      expect(results).toHaveLength(2);
+      expect(results[0].id).toBe('1');
+      expect(results[1].id).toBe('2');
+      expect(results[0].totalExpectedMinutes).toBe(30);
+      expect(results[1].totalExpectedMinutes).toBe(62);
+      expect(results[1].scoreComponents.timeFit).toBe(0);
+    });
+
+    it('should rank slower candidates lower instead of excluding them', () => {
+      // For route = 10, round trip = 20. Limit is 45. Kept (meal capped to 25).
+      // For route = 23, round trip = 46. Limit is 45. Excluded.
+      const candidates = [
+        {
+          id: '1',
+          name: 'In Time',
+          category: '한식',
+          address: 'Address 1',
+          oneWayRouteMinutes: 10,
+          distanceMeters: 800
+        },
+        {
+          id: '2',
           name: 'Too Slow',
           category: '한식',
           address: 'Address 2',
-          oneWayRouteMinutes: 10,
-          distanceMeters: 800
+          oneWayRouteMinutes: 23,
+          distanceMeters: 1800
         }
       ];
 
       const results = rankCandidates(candidates, baseSlot);
-      expect(results).toHaveLength(1);
+      expect(results).toHaveLength(2);
       expect(results[0].id).toBe('1');
+      expect(results[1].scoreComponents.timeFit).toBe(0);
     });
 
-    it('should exclude candidate if there is a hard match with excluded food keyword', () => {
+    it('should rank excluded-food matches lower instead of removing them', () => {
       const candidates = [
         {
           id: '1',
@@ -170,11 +206,12 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       };
 
       const results = rankCandidates(candidates, slotWithExclusion);
-      expect(results).toHaveLength(1);
-      expect(results[0].id).toBe('2'); // '고기' is a token in '육류,고기' category of candidate 1
+      expect(results).toHaveLength(2);
+      expect(results[0].id).toBe('2');
+      expect(results[1].scoreComponents.constraintPenalty).toBeGreaterThan(0);
     });
 
-    it('should exclude candidate if current time is outside opening hours', () => {
+    it('should rank closed venues lower instead of removing them', () => {
       const candidates = [
         {
           id: '1',
@@ -202,11 +239,13 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
         baseSlot,
         '2026-05-20T15:00:00+09:00'
       );
-      expect(results).toHaveLength(1);
+      expect(results).toHaveLength(2);
       expect(results[0].id).toBe('1');
+      expect(results[1].openStatus).toBe(false);
+      expect(results[1].scoreComponents.constraintPenalty).toBeGreaterThan(0);
     });
 
-    it('should exclude candidate if price exceeds budget (when budget data is NOT universally missing)', () => {
+    it('should rank over-budget candidates lower instead of removing them', () => {
       const candidates = [
         {
           id: '1',
@@ -229,8 +268,9 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       ];
 
       const results = rankCandidates(candidates, baseSlot);
-      expect(results).toHaveLength(1);
+      expect(results).toHaveLength(2);
       expect(results[0].id).toBe('1');
+      expect(results[1].scoreComponents.budgetFit).toBe(0);
     });
 
     it('should keep candidates even if price exceeds budget if budget data IS universally missing', () => {
@@ -250,11 +290,111 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe('1');
     });
+
+    it('ranks hangover soup above chicken when foodPreferenceScores favor soup', () => {
+      const candidates = [
+        {
+          id: 'c1',
+          name: 'BBQ치킨',
+          category: '치킨',
+          address: 'Address 1',
+          oneWayRouteMinutes: 3,
+          distanceMeters: 250
+        },
+        {
+          id: 's1',
+          name: '할매국밥',
+          category: '국밥',
+          address: 'Address 2',
+          oneWayRouteMinutes: 5,
+          distanceMeters: 400
+        }
+      ];
+
+      const results = rankCandidates(candidates, {
+        ...baseSlot,
+        foodPreferenceScores: [
+          { food: '국밥', score: 95 },
+          { food: '치킨', score: 10 }
+        ]
+      });
+
+      expect(results[0].id).toBe('s1');
+      expect(results[1].scoreComponents.foodMismatchPenalty).toBeGreaterThan(0);
+    });
+
+    it('ranks hangover soup above chicken when desiredFoods includes 해장', () => {
+      const candidates = [
+        {
+          id: 'c1',
+          name: 'BBQ치킨',
+          category: '치킨',
+          address: 'Address 1',
+          oneWayRouteMinutes: 3,
+          distanceMeters: 250
+        },
+        {
+          id: 's1',
+          name: '할매국밥',
+          category: '국밥',
+          address: 'Address 2',
+          oneWayRouteMinutes: 5,
+          distanceMeters: 400
+        }
+      ];
+
+      const results = rankCandidates(candidates, {
+        ...baseSlot,
+        desiredFoods: ['해장']
+      });
+
+      expect(results[0].id).toBe('s1');
+      expect(results[1].scoreComponents.foodMismatchPenalty).toBeGreaterThan(0);
+    });
+
+    it('should rank meat-focused restaurants higher when desiredFoods includes 고기', () => {
+      const candidates = [
+        {
+          id: '1',
+          name: '샤브로',
+          category: '샤브샤브',
+          address: 'Address 1',
+          oneWayRouteMinutes: 3,
+          distanceMeters: 250,
+          rating: 4.2,
+          reviews: [{ body: '국물이 깔끔해요', rating: 4 }]
+        },
+        {
+          id: '2',
+          name: '육식사관학교',
+          category: '육류,고기',
+          address: 'Address 2',
+          oneWayRouteMinutes: 5,
+          distanceMeters: 400,
+          rating: 4.6,
+          reviews: [
+            { body: '삼겹살이 두툼하고 맛있어요', rating: 5 },
+            { body: '고기 굽기 좋고 재방문 의사 있음', rating: 5 }
+          ],
+          reviewSummary: { pros: '삼겹살이 두툼하고 맛있어요', cons: null }
+        }
+      ];
+
+      const results = rankCandidates(candidates, {
+        ...baseSlot,
+        desiredFoods: ['고기']
+      });
+
+      expect(results[0].id).toBe('2');
+      expect(results[0].scoreComponents.foodPreferenceFit).toBeGreaterThan(
+        results[1].scoreComponents.foodPreferenceFit
+      );
+    });
   });
 
   describe('Soft Score Components', () => {
-    it('should calculate timeFit correctly (linear scale, max 35)', () => {
-      // totalTimeMinutes = 60, totalExpectedMinutes = 30 -> timeFit = 35 * (60 - 30) / (60 - 20) = 26.25
+    it('should calculate timeFit as in-range base plus tie-breaker (max 10)', () => {
+      // totalTimeMinutes = 60, totalExpectedMinutes = 30 -> base 8 + tie-breaker 2 = 10
       const slot = {
         totalTimeMinutes: 60,
         transportMode: 'walk',
@@ -274,10 +414,10 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       ];
 
       const results = rankCandidates(candidates, slot);
-      expect(results[0].scoreComponents.timeFit).toBeCloseTo(26.25, 2);
+      expect(results[0].scoreComponents.timeFit).toBeCloseTo(9.5, 2);
     });
 
-    it('should calculate distanceFit correctly (max 15)', () => {
+    it('should calculate distanceFit correctly (max 5)', () => {
       const slot = {
         totalTimeMinutes: 45,
         transportMode: 'walk',
@@ -292,12 +432,58 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
           category: '한식',
           address: 'Address 1',
           oneWayRouteMinutes: 5,
-          distanceMeters: 1000 // walk max is 2000m -> 15 * (1 - 1000/2000) = 7.5
+          distanceMeters: 1000 // walk max is 2000m -> 5 * (1 - 1000/2000) = 2.5
         }
       ];
 
       const results = rankCandidates(candidates, slot);
-      expect(results[0].scoreComponents.distanceFit).toBe(7.5);
+      expect(results[0].scoreComponents.distanceFit).toBe(2.5);
+    });
+
+    it('prefers desired food and reviews over closer distance when both are in time budget', () => {
+      const candidates = [
+        {
+          id: 'near-chicken',
+          name: '근처치킨',
+          category: '치킨',
+          address: 'Address 1',
+          oneWayRouteMinutes: 3,
+          distanceMeters: 150,
+          rating: 4.1,
+          reviews: [{ body: '배달이 빨라요', rating: 4 }]
+        },
+        {
+          id: 'far-meat',
+          name: '육식당',
+          category: '고기,삼겹살',
+          address: 'Address 2',
+          oneWayRouteMinutes: 12,
+          distanceMeters: 900,
+          rating: 4.7,
+          reviews: [
+            { body: '삼겹살이 두툼하고 맛있어요', rating: 5 },
+            { body: '고기 질이 좋아 재방문했어요', rating: 5 }
+          ],
+          reviewSummary: { pros: '삼겹살이 두툼하고 맛있어요', cons: null }
+        }
+      ];
+
+      const results = rankCandidates(candidates, {
+        totalTimeMinutes: 60,
+        transportMode: 'walk',
+        partyContext: '친구',
+        vibe: 'casual',
+        budgetPerPersonKrw: 20000,
+        desiredFoods: ['고기']
+      });
+
+      expect(results[0].id).toBe('far-meat');
+      expect(results[0].scoreComponents.foodPreferenceFit).toBeGreaterThan(
+        results[1].scoreComponents.foodPreferenceFit
+      );
+      expect(results[0].scoreComponents.distanceFit).toBeLessThan(
+        results[1].scoreComponents.distanceFit
+      );
     });
 
     it('should calculate contextFit correctly (max 15, exact dictionary / custom text)', () => {
@@ -523,17 +709,17 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       };
     }
 
-    it('excludes cafe-category candidates by default', () => {
+    it('ranks cafe-category candidates lower by default instead of excluding them', () => {
       const candidates = [
         makeVenueCandidate('c1', '스타벅스', '카페'),
         makeVenueCandidate('r1', '깔끔국밥', '한식')
       ];
       const results = rankCandidates(candidates, baseSlot);
-      expect(results.map((c) => c.id)).not.toContain('c1');
-      expect(results.map((c) => c.id)).toContain('r1');
+      expect(results.map((c) => c.id)).toEqual(['r1', 'c1']);
+      expect(results[1].scoreComponents.constraintPenalty).toBeGreaterThan(0);
     });
 
-    it('excludes bar/pub-category candidates by default', () => {
+    it('ranks bar/pub-category candidates lower by default instead of excluding them', () => {
       const candidates = [
         makeVenueCandidate('b1', '맥주창고', '술집'),
         makeVenueCandidate('b2', '호프집', '호프/요리주점'),
@@ -541,9 +727,9 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       ];
       const results = rankCandidates(candidates, baseSlot);
       const ids = results.map((c) => c.id);
-      expect(ids).not.toContain('b1');
-      expect(ids).not.toContain('b2');
-      expect(ids).toContain('r1');
+      expect(ids[0]).toBe('r1');
+      expect(ids).toContain('b1');
+      expect(ids).toContain('b2');
     });
 
     it('includes cafes when venuePreference is cafe', () => {
@@ -566,6 +752,18 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       expect(results.map((c) => c.id)).toContain('b1');
     });
 
+    it('ranks bars above shabu places when venuePreference is bar', () => {
+      const barSlot = { ...baseSlot, venuePreference: 'bar' };
+      const candidates = [
+        makeVenueCandidate('s1', '샤브로21', '샤브샤브'),
+        makeVenueCandidate('b1', '맥주창고', '술집')
+      ];
+      const results = rankCandidates(candidates, barSlot);
+      expect(results[0].id).toBe('b1');
+      expect(results[0].scoreComponents.venueIntentFit).toBeGreaterThan(0);
+      expect(results[1].scoreComponents.venueIntentMismatchPenalty).toBeGreaterThan(0);
+    });
+
     it('includes both cafes and bars when venuePreference is any', () => {
       const anySlot = { ...baseSlot, venuePreference: 'any' };
       const candidates = [
@@ -580,14 +778,14 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       expect(ids).toContain('r1');
     });
 
-    it('excludes cafes even when vibe text mentions 카페 without venuePreference field', () => {
+    it('ranks cafes lower than restaurants when venuePreference is restaurant', () => {
       const slotWithVibe = { ...baseSlot, vibe: '카페에서 조용히', venuePreference: 'restaurant' };
       const candidates = [
         makeVenueCandidate('c1', '스타벅스', '카페'),
         makeVenueCandidate('r1', '깔끔국밥', '한식')
       ];
       const results = rankCandidates(candidates, slotWithVibe);
-      expect(results.map((c) => c.id)).not.toContain('c1');
+      expect(results.map((c) => c.id)).toEqual(['r1', 'c1']);
     });
   });
 

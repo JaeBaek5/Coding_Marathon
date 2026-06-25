@@ -114,7 +114,7 @@ test.describe('Mumuk Results UI', () => {
       eligibleCount: results.length,
       results,
       currentRecommendation: results[0] || null,
-      candidatePool: candidatePool.slice(0, 3)
+      candidatePool: results
     };
   }
 
@@ -132,7 +132,7 @@ test.describe('Mumuk Results UI', () => {
           mapProvider: 'naver',
           defaultLocale: 'ko-KR',
           supportedTransportModes: ['walk', 'drive'],
-          timeRange: { min: 20, max: 60 }
+          timeRange: { min: 20, max: null }
         })
       });
     });
@@ -163,14 +163,6 @@ test.describe('Mumuk Results UI', () => {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify(createResultsPayload([candidatePool[1]]))
-          });
-          return;
-        }
-        if (answerCallCount === 2) {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
             body: JSON.stringify(createResultsPayload(candidatePool.slice(1)))
           });
           return;
@@ -178,7 +170,7 @@ test.describe('Mumuk Results UI', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(createResultsPayload(candidatePool.slice(1)))
+          body: JSON.stringify(createResultsPayload(candidatePool.slice(2)))
         });
         return;
       }
@@ -186,12 +178,12 @@ test.describe('Mumuk Results UI', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(createResultsPayload([candidatePool[0]]))
+        body: JSON.stringify(createResultsPayload(candidatePool))
       });
     });
   });
 
-  test('should render results and follow one-at-a-time dislike reveal flow', async ({
+  test('should render full result pool and remove disliked cards', async ({
     page
   }) => {
     await page.goto('/');
@@ -217,12 +209,12 @@ test.describe('Mumuk Results UI', () => {
 
     const subtitle = page.locator('.results-header .subtitle');
     await expect(subtitle).toBeVisible();
-    await expect(subtitle).toContainText('1곳');
+    await expect(subtitle).toContainText('3곳');
 
     const resultCards = page.locator('.result-card');
-    await expect(resultCards).toHaveCount(1);
+    await expect(resultCards).toHaveCount(3);
 
-    await expect(page.locator('.restaurant-name')).toHaveText('First Restaurant');
+    await expect(page.locator('.restaurant-name').first()).toHaveText('First Restaurant');
     await expect(page.locator('.reason-text')).toHaveText('Great place for lunch.');
     await expect(page.locator('.review-line')).toHaveCount(2);
     await expect(page.locator('.review-line')).toHaveText([
@@ -233,27 +225,23 @@ test.describe('Mumuk Results UI', () => {
     const firstDislike = resultCards.nth(0).locator('.feedback-btn').first();
     await firstDislike.click();
 
-    await expect(resultCards).toHaveCount(1);
-    await expect(resultCards.nth(0).locator('.restaurant-name')).toHaveText(
-      'Second Restaurant'
+    await expect(resultCards).toHaveCount(2);
+    await expect(page.locator('.results-list-container')).not.toContainText(
+      'First Restaurant'
     );
-    await expect(subtitle).toContainText('1');
+    await expect(subtitle).toContainText('2곳');
 
     const secondDislike = page.locator('.result-card').nth(0).locator('.feedback-btn').first();
     await secondDislike.click();
 
-    await expect(resultCards).toHaveCount(2);
+    await expect(resultCards).toHaveCount(1);
     await expect(resultCards.nth(0).locator('.restaurant-name')).toHaveText(
-      'Second Restaurant'
-    );
-    await expect(resultCards.nth(1).locator('.restaurant-name')).toHaveText(
       'Third Restaurant'
     );
-    await expect(subtitle).toContainText('2');
+    await expect(subtitle).toContainText('1곳');
 
-    await resultCards.nth(1).click();
-    await expect(resultCards.nth(1)).toHaveClass(/active/);
-    await expect(resultCards.nth(0)).not.toHaveClass(/active/);
+    await resultCards.nth(0).click();
+    await expect(resultCards.nth(0)).toHaveClass(/active/);
 
     await expect(page.locator('.map-container')).toBeVisible();
   });

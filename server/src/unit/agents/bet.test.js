@@ -74,18 +74,19 @@ describe('Bet Agent Unit', () => {
     expect(result.results[0].oneWayRouteMinutes).toBe(6);
     expect(result.results[0].totalExpectedMinutes).toBe(42);
     expect(result.results[0].scoreTotal).toBeGreaterThan(0);
-    expect(result.results[0].scoreComponents.timeFit).toBeCloseTo(4.2, 1);
-    expect(result.results[0].scoreComponents.distanceFit).toBeCloseTo(11.25, 2);
+    expect(result.results[0].scoreComponents.timeFit).toBeCloseTo(8.24, 1);
+    expect(result.results[0].scoreComponents.distanceFit).toBeCloseTo(3.75, 2);
   });
 
   it('validates totalTimeMinutes strictly within the supported range', () => {
     expect(() => validateBetTimeBudget(20)).not.toThrow();
     expect(() => validateBetTimeBudget(60)).not.toThrow();
+    expect(() => validateBetTimeBudget(240)).not.toThrow();
+    expect(() => validateBetTimeBudget(241)).not.toThrow();
     expect(() => validateBetTimeBudget(19)).toThrow(RankingValidationError);
-    expect(() => validateBetTimeBudget(61)).toThrow(RankingValidationError);
   });
 
-  it('applies hard filters for invalid route time, budget overflow, and excluded foods', () => {
+  it('ranks constraint-violating candidates lower instead of filtering them out', () => {
     const slots = createSlots({ excludedFoods: ['고기'] });
     const ranked = rankBetCandidates(
       [
@@ -155,8 +156,9 @@ describe('Bet Agent Unit', () => {
       '2026-05-20T12:00:00+09:00'
     );
 
-    expect(ranked).toHaveLength(1);
+    expect(ranked).toHaveLength(4);
     expect(ranked[0].id).toBe('keep');
+    expect(ranked.find((item) => item.id === 'excluded')?.scoreComponents.constraintPenalty).toBeGreaterThan(0);
   });
 
   it('uses deterministic tie-breakers when total scores match', () => {
@@ -234,7 +236,7 @@ describe('Bet Agent Unit', () => {
     );
   });
 
-  it('excludes cafes and bars unless the slot bundle explicitly allows them', async () => {
+  it('ranks cafes and bars lower unless the slot bundle explicitly allows them', async () => {
     const logger = createLogger();
     const agent = new BetAgent({
       searchNearbyCandidates: vi.fn().mockResolvedValue([
@@ -252,7 +254,12 @@ describe('Bet Agent Unit', () => {
     );
 
     expect(defaultResult.status).toBe('results');
-    expect(defaultResult.results.map((item) => item.id)).toEqual(['restaurant-1']);
+    expect(defaultResult.results.map((item) => item.id)).toEqual([
+      'restaurant-1',
+      'cafe-1',
+      'bar-1'
+    ]);
+    expect(defaultResult.results[1].scoreComponents.constraintPenalty).toBeGreaterThan(0);
 
     const explicitResult = await agent.search(
       createSlots({ venueIntentExplicit: true }),
@@ -264,6 +271,11 @@ describe('Bet Agent Unit', () => {
       'cafe-1',
       'bar-1'
     ]);
+    expect(
+      explicitResult.results.every(
+        (item) => item.scoreComponents.constraintPenalty === 0
+      )
+    ).toBe(true);
   });
 });
 
@@ -333,7 +345,7 @@ describe('Bet Agent – Venue-Type Gating', () => {
     return { info: vi.fn(), error: vi.fn() };
   }
 
-  it('excludes cafes and bars by default when the prompt has no explicit cafe/bar intent', async () => {
+  it('ranks cafes and bars lower by default when the prompt has no explicit cafe/bar intent', async () => {
     const agent = new BetAgent({
       searchNearbyCandidates: vi
         .fn()
@@ -348,9 +360,9 @@ describe('Bet Agent – Venue-Type Gating', () => {
 
     expect(result.status).toBe('results');
     const ids = result.results.map((c) => c.id);
-    expect(ids).not.toContain('cafe-1');
-    expect(ids).not.toContain('bar-1');
-    expect(ids).toContain('rest-1');
+    expect(ids[0]).toBe('rest-1');
+    expect(ids).toContain('cafe-1');
+    expect(ids).toContain('bar-1');
   });
 
   it('includes cafes when the slot vibe explicitly requests 카페', async () => {

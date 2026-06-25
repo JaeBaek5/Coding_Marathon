@@ -3,15 +3,24 @@ import cors from 'cors';
 import { healthContract } from '../../shared/contracts/health.js';
 import { orchestrator } from './services/orchestrator.js';
 import { sessions } from './services/sessions.js';
-import { searchLocation } from './adapters/index.js';
+import { searchLocation, reverseGeocodeLocation } from './adapters/index.js';
 import {
   ErrorCodes,
   RecommendationRequestSchema,
   AnswersRequestSchema,
-  FeedbackRequestSchema
+  FeedbackRequestSchema,
+  isTotalTimeBelowMinimum,
+  totalTimeOutOfRangeMessage
 } from '../../shared/contracts/schemas.js';
+import { resolveTotalTimeMinutesHeuristic } from './services/slotExceptionResolver.js';
 import { logger, loggerMiddleware } from './utils/logger.js';
 import { getPublicConfig } from './config/publicConfig.js';
+import {
+  getClientIp,
+  isPrivateOrLocalIp,
+  lookupIpLocation
+} from './utils/ipGeolocation.js';
+import { getSessionProgress, resetSessionProgress } from './services/sessionProgress.js';
 
 const app = express();
 
@@ -52,6 +61,31 @@ app.get('/api/config/public', (_req, res) => {
   res.status(200).json(getPublicConfig());
 });
 
+app.post('/api/sessions', (_req, res) => {
+  const session = orchestrator.createSession({});
+  resetSessionProgress(session.id);
+  return res.status(201).json({ sessionId: session.id });
+});
+
+app.get('/api/sessions/:sessionId/progress', (req, res) => {
+  const { sessionId } = req.params;
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return res.status(410).json({
+      status: 'error',
+      code: ErrorCodes.SESSION_EXPIRED,
+      message: '세션이 만료되었거나 존재하지 않습니다.'
+    });
+  }
+
+  const progress = getSessionProgress(sessionId);
+  return res.status(200).json({
+    status: 'ok',
+    current: progress.current,
+    steps: progress.steps
+  });
+});
+
 app.get('/api/location-search', async (req, res) => {
   const q = req.query.q;
   if (!q) {
@@ -86,6 +120,64 @@ app.get('/api/location-search', async (req, res) => {
         message: '위치 검색에 실패했습니다.',
         missingFields: []
       });
+  }
+});
+
+app.get('/api/location/reverse', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(400).json({
+      status: 'error',
+      code: ErrorCodes.GEO_REQUIRED,
+      message: '유효한 좌표가 필요합니다.',
+      missingFields: []
+    });
+  }
+
+  try {
+    const result = await reverseGeocodeLocation(lat, lng);
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      lat,
+      lng,
+      label: result.label || null
+    });
+  } catch (err) {
+    logger.error('Reverse geocode failed', err, {
+      requestId: req.id,
+      lat,
+      lng
+    });
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      lat,
+      lng,
+      label: null
+    });
+  }
+});
+
+app.get('/api/location/ip', async (req, res) => {
+  const clientIp = getClientIp(req);
+  const lookupIp =
+    clientIp && !isPrivateOrLocalIp(clientIp) ? clientIp : null;
+
+  try {
+    const location = await lookupIpLocation(lookupIp);
+    res.set('Cache-Control', 'no-store');
+    return res.json(location);
+  } catch (err) {
+    logger.error('IP geolocation failed', err, {
+      requestId: req.id,
+      clientIp
+    });
+    return res.status(502).json({
+      status: 'error',
+      code: ErrorCodes.PROVIDER_ERROR,
+      message: 'IP 위치 추정에 실패했습니다.',
+      missingFields: []
+    });
   }
 });
 
@@ -169,13 +261,17 @@ app.post('/api/sessions/:sessionId/answers', async (req, res) => {
   const answers = parseResult.data.answers || {};
   const totalTime = answers.totalTimeMinutes;
   if (totalTime !== undefined && totalTime !== null) {
-    if (typeof totalTime !== 'number' || totalTime < 20 || totalTime > 60) {
+    if (typeof totalTime !== 'number' || !Number.isFinite(totalTime)) {
       return res.status(400).json({
         status: 'error',
         code: ErrorCodes.INVALID_TOTAL_TIME,
-        message: '총 소요시간은 20분 이상 60분 이하로 입력해 주세요.',
+        message: totalTimeOutOfRangeMessage(),
         missingFields: []
       });
+    }
+    if (isTotalTimeBelowMinimum(totalTime)) {
+      const resolved = resolveTotalTimeMinutesHeuristic(totalTime);
+      answers.totalTimeMinutes = resolved.value;
     }
   }
 

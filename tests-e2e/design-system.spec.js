@@ -10,7 +10,7 @@ async function mockMapConfig(page) {
         mapProvider: 'naver',
         defaultLocale: 'ko-KR',
         supportedTransportModes: ['walk', 'drive'],
-        timeRange: { min: 20, max: 60 }
+        timeRange: { min: 20, max: null }
       })
     });
   });

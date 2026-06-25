@@ -86,9 +86,11 @@ describe('mumuk shadcn design contract', () => {
     expect(app).toContain('오늘 뭐 먹지?');
     expect(queryForm).toContain('현재 위치 기준');
     expect(queryForm).toContain('출장/여행 모드');
-    expect(queryForm).toContain('식당 추천받기');
+    expect(queryForm).toContain('음식 맞추기');
+    expect(queryForm).toContain('지금 어떤 상태인지 알려주세요');
     expect(questionForm).toContain('추가 질문');
-    expect(questionForm).toContain('답변 제출하고 추천받기');
+    expect(questionForm).toContain('음식 맞추기');
+    expect(questionForm).toContain('이 음식으로 추천받기');
     expect(resultsList).toContain('추천 식당');
     expect(resultsList).toContain('추천 이유');
     expect(errorCard).toContain('서비스 일시 장애');

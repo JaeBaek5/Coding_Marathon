@@ -1,4 +1,4 @@
-export function createSessionStore() {
+function createSessionStoreInternal() {
   let sessionId = $state(null);
   let status = $state('initial');
   let query = $state('');
@@ -9,13 +9,71 @@ export function createSessionStore() {
   let results = $state([]);
   let error = $state(null);
   let loading = $state(false);
+  let activitySteps = $state([]);
   let userLocation = $state(null);
   let selectedLocation = $state(null);
   let searchQuery = $state('');
   let locationResults = $state([]);
   let activeResultIndex = $state(0);
+  let displayMode = $state('single');
+  let locationStatus = $state('idle');
+  let locationMessage = $state('');
+  let locationFetchPromise = null;
+  let mapTravelTimeMinutes = $state(60);
+  let mapTransportMode = $state('walk');
+
+  const GEOLOCATION_OPTIONS = {
+    timeout: 12000,
+    maximumAge: 60000,
+    enableHighAccuracy: true
+  };
+  const GPS_ATTEMPT_MS = 14000;
+  const PROGRESS_POLL_MS = 500;
+
+  let progressPollTimer = null;
+
+  function stopProgressPolling() {
+    if (progressPollTimer) {
+      clearInterval(progressPollTimer);
+      progressPollTimer = null;
+    }
+  }
+
+  async function pollProgressOnce(id) {
+    if (!id) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/sessions/${id}/progress`);
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      if (Array.isArray(data.steps)) {
+        activitySteps = data.steps;
+      }
+    } catch {
+      // 서버 진행 상태만 표시 — 폴링 실패 시 기존 단계 유지
+    }
+  }
+
+  function startProgressPolling(id) {
+    stopProgressPolling();
+    activitySteps = [];
+    if (!id) {
+      return;
+    }
+
+    void pollProgressOnce(id);
+    progressPollTimer = setInterval(() => {
+      void pollProgressOnce(id);
+    }, PROGRESS_POLL_MS);
+  }
 
   function reset() {
+    stopProgressPolling();
     sessionId = null;
     status = 'initial';
     query = '';
@@ -26,18 +84,28 @@ export function createSessionStore() {
     results = [];
     error = null;
     loading = false;
+    activitySteps = [];
     userLocation = null;
     selectedLocation = null;
     searchQuery = '';
     locationResults = [];
     activeResultIndex = 0;
+    displayMode = 'single';
+    locationStatus = 'idle';
+    locationMessage = '';
+    locationFetchPromise = null;
+    mapTravelTimeMinutes = 60;
+    mapTransportMode = 'walk';
+    void bootstrapLocation();
   }
 
   function switchToTravelMode() {
+    stopProgressPolling();
     status = 'initial';
     mode = 'travel';
     error = null;
     loading = false;
+    activitySteps = [];
     selectedLocation = null;
     userLocation = null;
     answers = {};
@@ -46,46 +114,218 @@ export function createSessionStore() {
     results = [];
     locationResults = [];
     activeResultIndex = 0;
+    displayMode = 'single';
+    locationStatus = 'idle';
+    locationMessage = '';
+    locationFetchPromise = null;
   }
 
-  async function getGeolocation() {
-    if (!navigator.geolocation) {
-      error = {
-        code: 'UNSUPPORTED_BROWSER',
-        message:
-          '이 브라우저는 위치 권한 API를 지원하지 않습니다. 수동 위치 선택으로 진행하세요.'
-      };
-      status = 'error';
+  function formatLocationSummary(location) {
+    if (!location) return '';
+    if (location.label) {
+      return location.label;
+    }
+    const lat = location.lat.toFixed(4);
+    const lng = location.lng.toFixed(4);
+    const accuracy =
+      typeof location.accuracyMeters === 'number'
+        ? ` · 정확도 약 ${Math.round(location.accuracyMeters)}m`
+        : '';
+    return `${lat}, ${lng}${accuracy}`;
+  }
+
+  function applyManualLocation(loc) {
+    const coords = loc?.coords || loc?.location;
+    if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') {
+      return false;
+    }
+
+    userLocation = {
+      lat: coords.lat,
+      lng: coords.lng,
+      source: 'manual-location',
+      label: loc.name || loc.address || null
+    };
+    locationStatus = 'ready';
+    locationMessage = loc.name
+      ? `선택한 위치 · ${loc.name}`
+      : `선택한 위치 · ${formatLocationSummary(userLocation)}`;
+    return true;
+  }
+
+  function clearUserLocation() {
+    userLocation = null;
+    locationStatus = 'idle';
+    locationMessage = '';
+    locationFetchPromise = null;
+  }
+
+  function normalizeIpLocationPayload(data) {
+    if (!data) {
+      return null;
+    }
+
+    const lat = Number(data.lat);
+    const lng = Number(data.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return null;
+    }
+
+    return {
+      lat,
+      lng,
+      source: 'ip-geolocation',
+      label: data.label || 'IP 추정 위치',
+      accuracyMeters: data.accuracyMeters ?? 5000
+    };
+  }
+
+  async function fetchReverseLabel(lat, lng) {
+    try {
+      const response = await fetch(
+        `/api/location/reverse?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&_=${Date.now()}`,
+        { cache: 'no-store' }
+      );
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return typeof data.label === 'string' && data.label.trim()
+        ? data.label.trim()
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function fetchIpLocation() {
+    const response = await fetch(`/api/location/ip?_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache'
+      }
+    });
+    const data = await response.json();
+    return normalizeIpLocationPayload(data);
+  }
+
+  async function tryGpsLocation() {
+    if (!window.isSecureContext || !navigator.geolocation) {
       return null;
     }
 
     return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), GPS_ATTEMPT_MS);
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          clearTimeout(timer);
           const coords = position.coords;
-          const loc = {
+          resolve({
             lat: coords.latitude,
             lng: coords.longitude,
-            source: 'browser-geolocation'
-          };
-          if (typeof coords.accuracy === 'number') {
-            loc.accuracyMeters = coords.accuracy;
-          }
-          userLocation = loc;
-          resolve(loc);
+            source: 'browser-geolocation',
+            ...(typeof coords.accuracy === 'number'
+              ? { accuracyMeters: coords.accuracy }
+              : {})
+          });
         },
         () => {
-          error = {
-            code: 'GEO_REQUIRED',
-            message:
-              '현재 위치 권한이 거부되어 추천을 시작할 수 없습니다. 이동/여행 모드로 전환해 수동으로 위치를 선택하세요.'
-          };
-          status = 'error';
+          clearTimeout(timer);
           resolve(null);
         },
-        { timeout: 10000 }
+        GEOLOCATION_OPTIONS
       );
     });
+  }
+
+  function applyResolvedLocation(location, { viaGps = false, viaIp = false } = {}) {
+    userLocation = location;
+    locationStatus = 'ready';
+    if (viaGps) {
+      locationMessage = location.label
+        ? `내 위치 · ${location.label}${formatAccuracySuffix(location)}`
+        : `내 위치 · ${formatLocationSummary(location)}`;
+    } else if (viaIp) {
+      locationMessage = location.label
+        ? `대략 위치 · ${location.label} (IP 추정)`
+        : `대략 위치 · ${formatLocationSummary(location)} (IP 추정)`;
+    } else {
+      locationMessage = `위치 선택됨 · ${formatLocationSummary(location)}`;
+    }
+    return location;
+  }
+
+  function formatAccuracySuffix(location) {
+    if (typeof location.accuracyMeters !== 'number') {
+      return '';
+    }
+    return ` · 정확도 약 ${Math.round(location.accuracyMeters)}m`;
+  }
+
+  async function bootstrapLocation() {
+    if (mode !== 'normal') {
+      return null;
+    }
+
+    if (locationStatus === 'ready' && userLocation) {
+      return userLocation;
+    }
+
+    if (locationFetchPromise) {
+      return locationFetchPromise;
+    }
+
+    locationStatus = 'acquiring';
+    locationMessage =
+      '내 위치 확인 중... 브라우저에서 위치 허용을 눌러 주세요.';
+
+    locationFetchPromise = (async () => {
+      try {
+        const gpsLocation = await tryGpsLocation();
+        if (gpsLocation) {
+          const label = await fetchReverseLabel(gpsLocation.lat, gpsLocation.lng);
+          return applyResolvedLocation(
+            label ? { ...gpsLocation, label } : gpsLocation,
+            { viaGps: true }
+          );
+        }
+
+        locationMessage = 'GPS를 사용할 수 없어 대략 위치를 확인 중...';
+        const ipLocation = await fetchIpLocation();
+        if (ipLocation) {
+          return applyResolvedLocation(ipLocation, { viaIp: true });
+        }
+
+        locationStatus = 'failed';
+        locationMessage =
+          '자동 위치 확인에 실패했습니다. 아래 검색창에 지역명(예: 순천역, 강남역)을 입력해 주세요.';
+        return null;
+      } catch {
+        locationStatus = 'failed';
+        locationMessage =
+          '자동 위치 확인에 실패했습니다. 아래 검색창에 지역명(예: 순천역, 강남역)을 입력해 주세요.';
+        return null;
+      } finally {
+        locationFetchPromise = null;
+      }
+    })();
+
+    return locationFetchPromise;
+  }
+
+  function restartLocationAcquisition() {
+    if (mode !== 'normal') {
+      return;
+    }
+
+    clearUserLocation();
+    void bootstrapLocation();
+  }
+
+  async function getGeolocation() {
+    return bootstrapLocation();
   }
 
   async function searchLocation(keyword) {
@@ -129,14 +369,41 @@ export function createSessionStore() {
     return null;
   }
 
+  async function prepareProgressSession() {
+    try {
+      const response = await fetch('/api/sessions', { method: 'POST' });
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return typeof data.sessionId === 'string' ? data.sessionId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function finalizeProgressSnapshot(id) {
+    if (!id) {
+      return;
+    }
+    stopProgressPolling();
+    await pollProgressOnce(id);
+  }
+
   async function submitQuery() {
     if (!query.trim()) return;
     loading = true;
     error = null;
 
     if (mode === 'normal') {
-      const browserLocation = await getGeolocation();
-      if (!browserLocation) {
+      if (locationStatus !== 'ready') {
+        error = {
+          code: 'GEO_REQUIRED',
+          message:
+            locationStatus === 'acquiring'
+              ? '위치 확인이 끝날 때까지 잠시만 기다려 주세요.'
+              : '위치를 먼저 확인하거나 아래 검색창에서 지역을 선택해 주세요.'
+        };
         loading = false;
         return;
       }
@@ -164,12 +431,19 @@ export function createSessionStore() {
     }
 
     try {
+      const progressSessionId = await prepareProgressSession();
+      if (progressSessionId) {
+        sessionId = progressSessionId;
+        startProgressPolling(progressSessionId);
+      }
+
       const response = await fetch('/api/recommendations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: query.trim(),
           mode,
+          ...(progressSessionId ? { sessionId: progressSessionId } : {}),
           location: requestLocation,
           userLocation:
             mode === 'normal'
@@ -207,6 +481,7 @@ export function createSessionStore() {
       };
       status = 'error';
     } finally {
+      await finalizeProgressSnapshot(sessionId);
       loading = false;
     }
   }
@@ -217,6 +492,7 @@ export function createSessionStore() {
     error = null;
 
     try {
+      startProgressPolling(sessionId);
       const response = await fetch(`/api/sessions/${sessionId}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -240,6 +516,7 @@ export function createSessionStore() {
       };
       status = 'error';
     } finally {
+      await finalizeProgressSnapshot(sessionId);
       loading = false;
     }
   }
@@ -264,7 +541,7 @@ export function createSessionStore() {
       data.questions.forEach((q) => {
         if (!(q.field in answers)) {
           answers[q.field] =
-            q.field === 'excludedFoods'
+            q.field === 'excludedFoods' || q.field === 'desiredFoods'
               ? []
               : q.field === 'budgetPerPersonKrw'
                 ? 10000
@@ -275,7 +552,9 @@ export function createSessionStore() {
       sessionId = data.sessionId;
       status = 'results';
       results = data.results || [];
+      displayMode = data.displayMode || 'single';
       activeResultIndex = 0;
+    displayMode = 'single';
     } else if (data.status === 'error') {
       error = {
         code: data.code,
@@ -329,6 +608,9 @@ export function createSessionStore() {
     get loading() {
       return loading;
     },
+    get activitySteps() {
+      return activitySteps;
+    },
     get userLocation() {
       return userLocation;
     },
@@ -353,12 +635,49 @@ export function createSessionStore() {
     set activeResultIndex(val) {
       activeResultIndex = val;
     },
+    get displayMode() {
+      return displayMode;
+    },
+    get locationStatus() {
+      return locationStatus;
+    },
+    get locationMessage() {
+      return locationMessage;
+    },
+    get mapTravelTimeMinutes() {
+      return mapTravelTimeMinutes;
+    },
+    set mapTravelTimeMinutes(val) {
+      const minutes = Number(val);
+      mapTravelTimeMinutes = Number.isFinite(minutes) ? minutes : mapTravelTimeMinutes;
+    },
+    get mapTransportMode() {
+      return mapTransportMode;
+    },
+    set mapTransportMode(val) {
+      if (val === 'walk' || val === 'drive') {
+        mapTransportMode = val;
+      }
+    },
+    get locationSummary() {
+      return formatLocationSummary(userLocation);
+    },
     reset,
     switchToTravelMode,
     searchLocation,
+    bootstrapLocation,
+    restartLocationAcquisition,
+    applyManualLocation,
+    clearUserLocation,
     submitQuery,
     submitAnswers,
     submitFeedback,
     submitAnswersWithPayload
   };
+}
+
+export const session = createSessionStoreInternal();
+
+export function createSessionStore() {
+  return session;
 }

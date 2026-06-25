@@ -1,58 +1,57 @@
 <script>
+  import { getDefaultOptionsForField } from '@shared/contracts/questionPresets.js';
+
   const { session } = $props();
 
   let tempFood = $state('');
 
-  const mealOptions = [
-    { value: 'breakfast', label: '아침' },
-    { value: 'lunch', label: '점심' },
-    { value: 'dinner', label: '저녁' },
-    { value: 'late_night', label: '야식' }
-  ];
+  const TEXT_INPUT_FIELDS = new Set([
+    'budgetPerPersonKrw',
+    'totalTimeMinutes',
+    'partyContext',
+    'vibe',
+    'excludedFoods'
+  ]);
 
-  const transportOptions = [
-    { value: 'walk', label: '도보' },
-    { value: 'drive', label: '차량' }
-  ];
+  const BUTTON_ONLY_FIELDS = new Set([
+    'mode',
+    'mealPeriod',
+    'transportMode',
+    'desiredFoods'
+  ]);
 
-  const budgetPresets = [
-    { value: 10000, label: '1만원' },
-    { value: 15000, label: '1.5만원' },
-    { value: 20000, label: '2만원' },
-    { value: 30000, label: '3만원' }
-  ];
-
-  const timePresets = [
-    { value: 30, label: '30분' },
-    { value: 45, label: '45분' },
-    { value: 60, label: '60분 (1시간)' }
-  ];
-
-  const partyPresets = ['혼밥', '친구', '데이트', '직장 동료', '상사', '가족'];
-  const vibePresets = ['캐주얼', '조용한', '분위기 좋은', '격식 있는', '활기찬'];
-
-  function selectMeal(val) {
-    session.answers.mealPeriod = val;
+  function resolveOptions(question) {
+    if (question.options?.length) {
+      return question.options;
+    }
+    return getDefaultOptionsForField(
+      question.field,
+      session.answers,
+      session.query || ''
+    ) || [];
   }
 
-  function selectTransport(val) {
-    session.answers.transportMode = val;
+  function valuesEqual(field, left, right) {
+    if (Array.isArray(left) || Array.isArray(right)) {
+      return JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
+    }
+    return left === right;
   }
 
-  function selectBudget(val) {
-    session.answers.budgetPerPersonKrw = val;
+  function isOptionSelected(field, value) {
+    return valuesEqual(field, session.answers[field], value);
   }
 
-  function selectTime(val) {
-    session.answers.totalTimeMinutes = val;
-  }
-
-  function selectParty(val) {
-    session.answers.partyContext = val;
-  }
-
-  function selectVibe(val) {
-    session.answers.vibe = val;
+  function selectOption(field, value) {
+    if (field === 'excludedFoods') {
+      session.answers.excludedFoods = Array.isArray(value) ? [...value] : [value];
+      return;
+    }
+    if (field === 'desiredFoods') {
+      session.answers.desiredFoods = Array.isArray(value) ? [...value] : [value];
+      return;
+    }
+    session.answers[field] = value;
   }
 
   function addExcludedFood() {
@@ -69,176 +68,150 @@
   function removeExcludedFood(food) {
     session.answers.excludedFoods = session.answers.excludedFoods.filter((f) => f !== food);
   }
+
+  function showTextInput(field, options = []) {
+    if (BUTTON_ONLY_FIELDS.has(field)) {
+      return false;
+    }
+    if (field === 'location') {
+      return false;
+    }
+    return TEXT_INPUT_FIELDS.has(field) || options.length === 0;
+  }
+  const isFoodCravingStep = $derived(
+    session.questions.length === 1 && session.questions[0]?.field === 'desiredFoods'
+  );
+
+  const canSubmitAnswers = $derived.by(() => {
+    if (!isFoodCravingStep) {
+      return true;
+    }
+    const selected = session.answers.desiredFoods;
+    return Array.isArray(selected) && selected.length > 0;
+  });
 </script>
 
 <div class="question-form card">
   <div class="question-header">
-    <h3 class="title">추가 질문</h3>
-    <p class="subtitle">더 만족스러운 추천을 위해 아래 정보를 알려주세요.</p>
+    <h3 class="title">{isFoodCravingStep ? '음식 맞추기' : '추가 질문'}</h3>
+    <p class="subtitle">
+      {#if isFoodCravingStep}
+        AI가 지금 상태에 맞는 음식 3가지를 골라봤어요. 마음에 드는 걸 선택해 주세요.
+      {:else}
+        입력하지 않은 항목은 기본값으로 진행됩니다.
+      {/if}
+    </p>
   </div>
 
   <div class="questions-list">
     {#each session.questions as q}
+      {@const options = resolveOptions(q)}
       <div class="question-item">
         <label class="question-label" for="input-{q.field}">{q.label}</label>
 
-        {#if q.field === 'mealPeriod'}
+        {#if isFoodCravingStep && q.avoidSuggestions?.length}
+          <div class="avoid-foods">
+            <span class="avoid-label">비추천 음식</span>
+            <div class="avoid-tags">
+              {#each q.avoidSuggestions as avoid}
+                <span class="badge-tag avoid-tag">{avoid.label}</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if options.length}
           <div class="pill-group">
-            {#each mealOptions as opt}
+            {#each options as opt}
               <button
                 type="button"
-                class="pill-select {session.answers.mealPeriod === opt.value ? 'selected' : ''}"
-                onclick={() => selectMeal(opt.value)}
+                class="pill-select {isOptionSelected(q.field, opt.value) ? 'selected' : ''}"
+                onclick={() => selectOption(q.field, opt.value)}
               >
                 {opt.label}
               </button>
             {/each}
           </div>
+        {/if}
 
-        {:else}
-          {#if q.field === 'transportMode'}
-            <div class="pill-group">
-              {#each transportOptions as opt}
-                <button
-                  type="button"
-                  class="pill-select {session.answers.transportMode === opt.value ? 'selected' : ''}"
-                  onclick={() => selectTransport(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              {/each}
+        {#if q.field === 'location'}
+          <p class="location-hint">
+            위치가 필요합니다. 처음 화면으로 돌아가 위치를 선택한 뒤 다시 검색해 주세요.
+          </p>
+          <button type="button" class="button-dark location-reset-btn" onclick={() => session.reset()}>
+            처음으로 돌아가기
+          </button>
+        {:else if showTextInput(q.field, options)}
+          {#if q.field === 'budgetPerPersonKrw'}
+            <div class="input-preset-container">
+              <input
+                id="input-budgetPerPersonKrw"
+                type="number"
+                class="text-input"
+                placeholder="예: 10000"
+                bind:value={session.answers.budgetPerPersonKrw}
+              />
+              <span class="unit">원</span>
             </div>
-
-          {:else}
-            {#if q.field === 'budgetPerPersonKrw'}
-              <div class="input-preset-container">
-                <input
-                  id="input-budgetPerPersonKrw"
-                  type="number"
-                  class="text-input"
-                  placeholder="예: 10000"
-                  bind:value={session.answers.budgetPerPersonKrw}
-                />
-                <span class="unit">원</span>
-              </div>
-              <div class="pill-group presets">
-                {#each budgetPresets as preset}
-                  <button
-                    type="button"
-                    class="badge-tag preset-pill {session.answers.budgetPerPersonKrw === preset.value ? 'active' : ''}"
-                    onclick={() => selectBudget(preset.value)}
-                  >
-                    {preset.label}
-                  </button>
+          {:else if q.field === 'totalTimeMinutes'}
+            <div class="input-preset-container">
+              <input
+                id="input-totalTimeMinutes"
+                type="number"
+                min="20"
+                class="text-input"
+                placeholder="20분 이상 (제한 없음)"
+                bind:value={session.answers.totalTimeMinutes}
+              />
+              <span class="unit">분</span>
+            </div>
+          {:else if q.field === 'partyContext'}
+            <input
+              id="input-partyContext"
+              type="text"
+              class="text-input"
+              placeholder="예: 회사 상사, 친구 등"
+              bind:value={session.answers.partyContext}
+            />
+          {:else if q.field === 'vibe'}
+            <input
+              id="input-vibe"
+              type="text"
+              class="text-input"
+              placeholder="예: 조용한, 캐주얼한 등"
+              bind:value={session.answers.vibe}
+            />
+          {:else if q.field === 'excludedFoods'}
+            <div class="food-input-group">
+              <input
+                id="input-excludedFoods"
+                type="text"
+                class="text-input food-input"
+                placeholder="피하고 싶은 음식 (예: 오이, 당근)"
+                bind:value={tempFood}
+                onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), addExcludedFood())}
+              />
+              <button type="button" class="button-dark add-food-btn" onclick={addExcludedFood}>
+                추가
+              </button>
+            </div>
+            {#if session.answers.excludedFoods && session.answers.excludedFoods.length > 0}
+              <div class="excluded-tags">
+                {#each session.answers.excludedFoods as food}
+                  <span class="badge-tag food-tag">
+                    {food}
+                    <button type="button" class="remove-food" onclick={() => removeExcludedFood(food)}>×</button>
+                  </span>
                 {/each}
               </div>
-
-            {:else}
-              {#if q.field === 'totalTimeMinutes'}
-                <div class="input-preset-container">
-                  <input
-                    id="input-totalTimeMinutes"
-                    type="number"
-                    min="20"
-                    max="60"
-                    class="text-input"
-                    placeholder="20~60분 사이"
-                    bind:value={session.answers.totalTimeMinutes}
-                  />
-                  <span class="unit">분</span>
-                </div>
-                <div class="pill-group presets">
-                  {#each timePresets as preset}
-                    <button
-                      type="button"
-                      class="badge-tag preset-pill {session.answers.totalTimeMinutes === preset.value ? 'active' : ''}"
-                      onclick={() => selectTime(preset.value)}
-                    >
-                      {preset.label}
-                    </button>
-                  {/each}
-                </div>
-
-              {:else}
-                {#if q.field === 'partyContext'}
-                  <input
-                    id="input-partyContext"
-                    type="text"
-                    class="text-input"
-                    placeholder="예: 회사 상사, 친구 등"
-                    bind:value={session.answers.partyContext}
-                  />
-                  <div class="pill-group presets">
-                    {#each partyPresets as preset}
-                      <button
-                        type="button"
-                        class="badge-tag preset-pill {session.answers.partyContext === preset ? 'active' : ''}"
-                        onclick={() => selectParty(preset)}
-                      >
-                        {preset}
-                      </button>
-                    {/each}
-                  </div>
-
-                {:else}
-                  {#if q.field === 'vibe'}
-                    <input
-                      id="input-vibe"
-                      type="text"
-                      class="text-input"
-                      placeholder="예: 조용한, 캐주얼한 등"
-                      bind:value={session.answers.vibe}
-                    />
-                    <div class="pill-group presets">
-                      {#each vibePresets as preset}
-                        <button
-                          type="button"
-                          class="badge-tag preset-pill {session.answers.vibe === preset ? 'active' : ''}"
-                          onclick={() => selectVibe(preset)}
-                        >
-                          {preset}
-                        </button>
-                      {/each}
-                    </div>
-
-                  {:else}
-                    {#if q.field === 'excludedFoods'}
-                      <div class="food-input-group">
-                        <input
-                          id="input-excludedFoods"
-                          type="text"
-                          class="text-input food-input"
-                          placeholder="피하고 싶은 음식 (예: 오이, 당근)"
-                          bind:value={tempFood}
-                          onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), addExcludedFood())}
-                        />
-                        <button type="button" class="button-dark add-food-btn" onclick={addExcludedFood}>
-                          추가
-                        </button>
-                      </div>
-                      {#if session.answers.excludedFoods && session.answers.excludedFoods.length > 0}
-                        <div class="excluded-tags">
-                          {#each session.answers.excludedFoods as food}
-                            <span class="badge-tag food-tag">
-                              {food}
-                              <button type="button" class="remove-food" onclick={() => removeExcludedFood(food)}>×</button>
-                            </span>
-                          {/each}
-                        </div>
-                      {/if}
-
-                    {:else}
-                      <input
-                        id="input-{q.field}"
-                        type="text"
-                        class="text-input"
-                        bind:value={session.answers[q.field]}
-                      />
-                    {/if}
-                  {/if}
-                {/if}
-              {/if}
             {/if}
+          {:else}
+            <input
+              id="input-{q.field}"
+              type="text"
+              class="text-input"
+              bind:value={session.answers[q.field]}
+            />
           {/if}
         {/if}
       </div>
@@ -249,10 +222,12 @@
     <button
       class="button-primary submit-answers-btn"
       onclick={() => session.submitAnswers()}
-      disabled={session.loading}
+      disabled={session.loading || !canSubmitAnswers}
     >
       {#if session.loading}
-        답변 제출 중...
+        처리 중...
+      {:else if isFoodCravingStep}
+        이 음식으로 추천받기
       {:else}
         답변 제출하고 추천받기
       {/if}
@@ -310,21 +285,30 @@
     gap: var(--spacing-sm);
   }
 
-  .pill-group.presets {
-    margin-top: var(--spacing-xs);
+  .avoid-foods {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
   }
 
-  .preset-pill {
-    padding: 6px 12px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+  .avoid-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-mute);
   }
 
-  .preset-pill.active {
-    background-color: var(--color-surface-dark);
-    color: var(--color-on-dark);
-    border-color: var(--color-surface-dark);
+  .avoid-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .avoid-tag {
+    color: var(--color-ash);
+    border-color: var(--color-hairline-strong);
+    background-color: var(--color-surface-bone);
+    font-size: 12px;
   }
 
   .input-preset-container {
@@ -332,6 +316,7 @@
     align-items: center;
     position: relative;
     width: 100%;
+    margin-top: var(--spacing-xs);
   }
 
   .input-preset-container .text-input {
@@ -349,6 +334,7 @@
   .food-input-group {
     display: flex;
     gap: var(--spacing-sm);
+    margin-top: var(--spacing-xs);
   }
 
   .food-input {
@@ -394,5 +380,19 @@
     width: 100%;
     height: 48px;
     font-size: 16px;
+  }
+
+  .location-hint {
+    font-size: 14px;
+    color: var(--color-mute);
+    line-height: 1.5;
+    margin-top: var(--spacing-xs);
+  }
+
+  .location-reset-btn {
+    align-self: flex-start;
+    margin-top: var(--spacing-sm);
+    height: 40px;
+    padding: 0 16px;
   }
 </style>

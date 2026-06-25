@@ -44,7 +44,7 @@ async function mockPublicConfig(page, overrides = {}) {
     mapProvider: 'naver',
     defaultLocale: 'ko-KR',
     supportedTransportModes: ['walk', 'drive'],
-    timeRange: { min: 20, max: 60 }
+    timeRange: { min: 20, max: null }
   };
 
   await page.route('**/api/config/public', async (route) => {
@@ -278,7 +278,7 @@ test.describe('smoke verification matrix', () => {
     );
   });
 
-  test('shows one-by-one dislike flow and reveals the pool after repeated feedback', async ({
+  test('shows full recommendation pool and removes disliked cards', async ({
     page,
     context
   }) => {
@@ -294,7 +294,7 @@ test.describe('smoke verification matrix', () => {
     await openRecommendationFlow(
       page,
       context,
-      createResultsPayload({ results: [candidates[0]] }),
+      createResultsPayload({ results: candidates }),
       {
         answersResponseFactory: (payload) => {
           if (payload?.answers?.action === 'dislike') {
@@ -302,20 +302,20 @@ test.describe('smoke verification matrix', () => {
 
             if (dislikeCount === 1) {
               return createResultsPayload({
-                eligibleCount: 1,
-                results: [candidates[1]]
+                eligibleCount: 4,
+                results: candidates.slice(1)
               });
             }
 
             return createResultsPayload({
               eligibleCount: 3,
-              results: [candidates[2], candidates[3], candidates[4]]
+              results: candidates.slice(2)
             });
           }
 
           return createResultsPayload({
-            eligibleCount: 1,
-            results: [candidates[0]]
+            eligibleCount: candidates.length,
+            results: candidates
           });
         }
       }
@@ -324,20 +324,23 @@ test.describe('smoke verification matrix', () => {
     await expect(page.locator('.results-list-container h2')).toContainText(
       '추천 식당'
     );
-    await expect(
-      page.locator('.results-list-container .restaurant-name')
-    ).toContainText('맛있는 식당 A');
-    await expect(page.locator('.result-card')).toHaveCount(1);
+    await expect(page.locator('.result-card')).toHaveCount(5);
+    await expect(page.locator('.results-list-container')).toContainText(
+      '맛있는 식당 A'
+    );
 
     await page
       .locator('.result-card')
       .first()
       .locator('button:has-text("싫어요")')
       .click();
-    await expect(
-      page.locator('.results-list-container .restaurant-name')
-    ).toContainText('맛있는 식당 B');
-    await expect(page.locator('.result-card')).toHaveCount(1);
+    await expect(page.locator('.result-card')).toHaveCount(4);
+    await expect(page.locator('.results-list-container')).not.toContainText(
+      '맛있는 식당 A'
+    );
+    await expect(page.locator('.results-list-container')).toContainText(
+      '맛있는 식당 B'
+    );
 
     await page
       .locator('.result-card')
@@ -345,14 +348,11 @@ test.describe('smoke verification matrix', () => {
       .locator('button:has-text("싫어요")')
       .click();
     await expect(page.locator('.result-card')).toHaveCount(3);
+    await expect(page.locator('.results-list-container')).not.toContainText(
+      '맛있는 식당 B'
+    );
     await expect(page.locator('.results-list-container')).toContainText(
       '맛있는 식당 C'
-    );
-    await expect(page.locator('.results-list-container')).toContainText(
-      '맛있는 식당 D'
-    );
-    await expect(page.locator('.results-list-container')).toContainText(
-      '맛있는 식당 E'
     );
   });
 });

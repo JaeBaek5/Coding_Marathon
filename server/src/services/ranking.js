@@ -1,5 +1,12 @@
-import { ErrorCodes } from '../../../shared/contracts/schemas.js';
-import { isVenueAllowed } from '../utils/venueGating.js';
+import {
+  ErrorCodes,
+  TOTAL_TIME_MIN_MINUTES,
+  totalTimeOutOfRangeMessage
+} from '../../../shared/contracts/schemas.js';
+import { isVenueAllowed, scoreVenueIntentFit } from '../utils/venueGating.js';
+import { scoreFoodPreference, deriveFoodPreferenceScores } from '../utils/foodPreference.js';
+import { scoreCandidateReviews } from './reviewScoring.js';
+import { computeDislikeSimilarityPenalty } from './dislikeSimilarity.js';
 
 export class RankingValidationError extends Error {
   constructor(message, code) {
@@ -10,20 +17,103 @@ export class RankingValidationError extends Error {
 }
 
 /**
- * Validates that the totalTimeMinutes budget is strictly within 20–60 minutes.
+ * Validates that the totalTimeMinutes budget is within the supported range.
  * @param {number} totalTimeMinutes
  */
 export function validateTimeBudget(totalTimeMinutes) {
   if (
     typeof totalTimeMinutes !== 'number' ||
-    totalTimeMinutes < 20 ||
-    totalTimeMinutes > 60
+    !Number.isFinite(totalTimeMinutes) ||
+    totalTimeMinutes < TOTAL_TIME_MIN_MINUTES
   ) {
     throw new RankingValidationError(
-      '총 소요시간은 20분 이상 60분 이하로 입력해 주세요.',
+      totalTimeOutOfRangeMessage(),
       ErrorCodes.INVALID_TOTAL_TIME
     );
   }
+}
+
+export const DEFAULT_MEAL_MINUTES = 30;
+
+/**
+ * Round-trip travel plus meal time, capped by the user's total time budget.
+ * Meal time defaults to 30 minutes but shrinks when the budget is tight.
+ */
+export function computeTotalExpectedMinutes(
+  oneWayRouteMinutes,
+  totalTimeMinutes
+) {
+  const roundTripMinutes = oneWayRouteMinutes * 2;
+  const mealMinutes = Math.min(
+    DEFAULT_MEAL_MINUTES,
+    Math.max(0, totalTimeMinutes - roundTripMinutes)
+  );
+  return roundTripMinutes + mealMinutes;
+}
+
+export function isWithinTimeBudget(oneWayRouteMinutes, totalTimeMinutes) {
+  return oneWayRouteMinutes * 2 <= totalTimeMinutes;
+}
+
+const HARD_EXCLUSION_PENALTY = 35;
+const VENUE_MISMATCH_PENALTY = 12;
+const CLOSED_HOURS_PENALTY = 10;
+
+/** Within travel-time budget, food + reviews dominate; distance/time are tie-breakers. */
+export const RANKING_WEIGHTS = {
+  TIME_FIT_MAX: 10,
+  TIME_FIT_IN_RANGE_BASE: 8,
+  TIME_FIT_TIE_BREAKER_MAX: 2,
+  DISTANCE_FIT_MAX: 5
+};
+
+/**
+ * Time score: flat bonus when the round trip fits the budget, small gradient as tie-breaker.
+ * Out-of-budget candidates get 0 — they remain rankable but sink below in-range matches.
+ */
+export function computeTimeFit(
+  withinTimeBudget,
+  totalExpectedMinutes,
+  totalTimeMinutes
+) {
+  if (!withinTimeBudget) {
+    return 0;
+  }
+
+  const { TIME_FIT_MAX, TIME_FIT_IN_RANGE_BASE, TIME_FIT_TIE_BREAKER_MAX } =
+    RANKING_WEIGHTS;
+
+  if (totalTimeMinutes <= TOTAL_TIME_MIN_MINUTES) {
+    return TIME_FIT_MAX;
+  }
+
+  const slack = totalTimeMinutes - totalExpectedMinutes;
+  const range = totalTimeMinutes - TOTAL_TIME_MIN_MINUTES;
+  const tieBreaker =
+    range > 0
+      ? Math.min(TIME_FIT_TIE_BREAKER_MAX, (TIME_FIT_TIE_BREAKER_MAX * slack) / range)
+      : 0;
+
+  return Math.min(TIME_FIT_MAX, TIME_FIT_IN_RANGE_BASE + tieBreaker);
+}
+
+export function computeDistanceFit(distanceMeters, transportMode) {
+  const maxDistance = transportMode === 'walk' ? 2000 : 10000;
+  return Math.max(
+    0,
+    RANKING_WEIGHTS.DISTANCE_FIT_MAX *
+      (1 - (distanceMeters || 0) / maxDistance)
+  );
+}
+
+function foodReviewSortScore(candidate) {
+  const components = candidate.scoreComponents || {};
+  return (
+    (components.foodPreferenceFit || 0) +
+    (components.reviewFit || 0) -
+    (components.foodMismatchPenalty || 0) -
+    (components.reviewMismatchPenalty || 0)
+  );
 }
 
 const ContextKeywords = {
@@ -170,7 +260,7 @@ function getCandidatePrice(candidate) {
  * @param {string} nowStr
  * @returns {Array} Up to 5 ranked candidates
  */
-export function rankCandidates(candidates, slot, nowStr, topN = 5) {
+export function rankCandidates(candidates, slot, nowStr, topN = 5, options = {}) {
   const {
     totalTimeMinutes,
     transportMode,
@@ -178,8 +268,16 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
     partyContext,
     vibe,
     budgetPerPersonKrw,
-    jobContext
+    jobContext,
+    desiredFoods = [],
+    foodPreferenceScores = []
   } = slot;
+  const resolvedFoodScores = deriveFoodPreferenceScores({
+    desiredFoods,
+    excludedFoods,
+    foodPreferenceScores
+  });
+  const dislikedProfiles = options.dislikedProfiles || [];
 
   validateTimeBudget(totalTimeMinutes);
 
@@ -187,11 +285,10 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
   const allPrices = candidates.map(getCandidatePrice);
   const universallyMissingBudget = allPrices.every((p) => p === null);
 
-  // 2. Filter candidates
-  const eligibleCandidates = [];
+  // 2. Score every candidate with a valid route (no hard exclusion)
+  const scoredPool = [];
 
   for (const candidate of candidates) {
-    // Hard filter: Valid route exists
     const hasRoute =
       candidate.oneWayRouteMinutes !== undefined &&
       candidate.oneWayRouteMinutes !== null &&
@@ -201,19 +298,17 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
       continue;
     }
 
-    if (!isVenueAllowed(candidate, slot)) {
-      continue;
-    }
+    const withinTimeBudget = isWithinTimeBudget(
+      candidate.oneWayRouteMinutes,
+      totalTimeMinutes
+    );
+    const totalExpectedMinutes = withinTimeBudget
+      ? computeTotalExpectedMinutes(
+          candidate.oneWayRouteMinutes,
+          totalTimeMinutes
+        )
+      : candidate.oneWayRouteMinutes * 2 + DEFAULT_MEAL_MINUTES;
 
-    // Calculate totalExpectedMinutes formula
-    const totalExpectedMinutes = candidate.oneWayRouteMinutes * 2 + 30;
-
-    // Hard filter: Within totalTimeMinutes limit
-    if (totalExpectedMinutes > totalTimeMinutes) {
-      continue;
-    }
-
-    // Hard filter: Excluded food/category keyword check (exact/fuzzy case-insensitive token match)
     let isHardExcluded = false;
     let isUncertainFuzzyExcluded = false;
 
@@ -228,7 +323,6 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
         const normExcluded = excludedFood.toLowerCase();
         if (!normExcluded) continue;
 
-        // Hard match if matches any token exactly or matches name/category exactly
         const exactTokenMatch = allTokens.includes(normExcluded);
         const exactFieldMatch =
           nameLower === normExcluded || catLower === normExcluded;
@@ -238,7 +332,6 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
           break;
         }
 
-        // Uncertain but fuzzy match if substring match but not hard-match
         if (
           nameLower.includes(normExcluded) ||
           catLower.includes(normExcluded)
@@ -248,62 +341,52 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
       }
     }
 
-    if (isHardExcluded) {
-      continue;
-    }
+    const venueAllowed = isVenueAllowed(candidate, slot);
 
-
-
-    // Hard filter: Opening hours window check
+    let isOpen = true;
     if (
       candidate.openingHours !== null &&
       candidate.openingHours !== undefined
     ) {
-      const isWindowOpen = isWithinServiceWindow(
-        candidate.openingHours,
-        nowStr
-      );
-      if (!isWindowOpen) {
-        continue;
-      }
+      isOpen = isWithinServiceWindow(candidate.openingHours, nowStr);
     }
 
-    // Hard filter: Budget limit check
     const price = getCandidatePrice(candidate);
-    if (
-      !universallyMissingBudget &&
-      price !== null &&
-      price > budgetPerPersonKrw
-    ) {
-      continue;
-    }
 
-    eligibleCandidates.push({
+    scoredPool.push({
       candidate,
       totalExpectedMinutes,
+      withinTimeBudget,
+      isHardExcluded,
       isUncertainFuzzyExcluded,
+      venueAllowed,
+      isOpen,
       price
     });
   }
 
-  // 3. Score candidates
-  const scoredCandidates = eligibleCandidates.map(
-    ({ candidate, totalExpectedMinutes, isUncertainFuzzyExcluded, price }) => {
-      // timeFit (35 points)
-      const timeFit =
-        totalTimeMinutes > 20
-          ? Math.max(
-              0,
-              (35 * (totalTimeMinutes - totalExpectedMinutes)) /
-                (totalTimeMinutes - 20)
-            )
-          : 35;
+  const scoredCandidates = scoredPool.map(
+    ({
+      candidate,
+      totalExpectedMinutes,
+      withinTimeBudget,
+      isHardExcluded,
+      isUncertainFuzzyExcluded,
+      venueAllowed,
+      isOpen,
+      price
+    }) => {
+      // timeFit — in-range gate + small tie-breaker (not a primary rank driver)
+      const timeFit = computeTimeFit(
+        withinTimeBudget,
+        totalExpectedMinutes,
+        totalTimeMinutes
+      );
 
-      // distanceFit (15 points)
-      const maxDistance = transportMode === 'walk' ? 2000 : 10000;
-      const distanceFit = Math.max(
-        0,
-        15 * (1 - (candidate.distanceMeters || 0) / maxDistance)
+      // distanceFit — lowest priority among soft scores
+      const distanceFit = computeDistanceFit(
+        candidate.distanceMeters,
+        transportMode
       );
 
       // contextFit (15 points)
@@ -385,8 +468,51 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
       if (!candidate.id) metadataConfidence -= 2;
       metadataConfidence = Math.max(0, metadataConfidence);
 
-      // categorySafety (5 points)
-      const categorySafety = isUncertainFuzzyExcluded ? 0 : 5;
+      const categorySafety = isUncertainFuzzyExcluded || isHardExcluded ? 0 : 5;
+
+      const { foodPreferenceFit, foodMismatchPenalty } = scoreFoodPreference(
+        candidate,
+        desiredFoods,
+        resolvedFoodScores
+      );
+
+      const { venueIntentFit, venueIntentMismatchPenalty } = scoreVenueIntentFit(
+        candidate,
+        slot
+      );
+
+      const {
+        reviewFit,
+        reviewSentimentFit,
+        reviewIntentFit,
+        reviewCoverageFit,
+        reviewMismatchPenalty
+      } = scoreCandidateReviews(candidate, desiredFoods);
+
+      const llmRelevanceFit =
+        typeof candidate.llmRelevanceScore === 'number'
+          ? Math.max(0, Math.min(30, candidate.llmRelevanceScore * 0.3))
+          : 0;
+      const llmSentimentFit =
+        typeof candidate.llmSentimentScore === 'number'
+          ? Math.max(0, Math.min(15, candidate.llmSentimentScore * 0.15))
+          : 0;
+
+      const dislikeSimilarityPenalty = computeDislikeSimilarityPenalty(
+        candidate,
+        dislikedProfiles
+      );
+
+      let constraintPenalty = 0;
+      if (isHardExcluded) {
+        constraintPenalty += HARD_EXCLUSION_PENALTY;
+      }
+      if (!venueAllowed) {
+        constraintPenalty += VENUE_MISMATCH_PENALTY;
+      }
+      if (!isOpen) {
+        constraintPenalty += CLOSED_HOURS_PENALTY;
+      }
 
       const scoreTotal = Number(
         (
@@ -396,7 +522,17 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
           vibeFit +
           budgetFit +
           metadataConfidence +
-          categorySafety
+          categorySafety +
+          foodPreferenceFit +
+          venueIntentFit +
+          reviewFit +
+          llmRelevanceFit +
+          llmSentimentFit -
+          constraintPenalty -
+          foodMismatchPenalty -
+          venueIntentMismatchPenalty -
+          reviewMismatchPenalty -
+          dislikeSimilarityPenalty
         ).toFixed(4)
       );
 
@@ -408,10 +544,9 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
             ? 'medium'
             : 'low';
 
-      // openStatus
       const openStatus =
         candidate.openingHours !== null && candidate.openingHours !== undefined
-          ? isWithinServiceWindow(candidate.openingHours, nowStr)
+          ? isOpen
           : candidate.openStatus !== undefined
             ? candidate.openStatus
             : null;
@@ -423,7 +558,20 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
         vibeFit,
         budgetFit,
         metadataConfidence,
-        categorySafety
+        categorySafety,
+        foodPreferenceFit,
+        venueIntentFit,
+        reviewFit,
+        reviewSentimentFit,
+        reviewIntentFit,
+        reviewCoverageFit,
+        llmRelevanceFit,
+        llmSentimentFit,
+        foodMismatchPenalty,
+        venueIntentMismatchPenalty,
+        reviewMismatchPenalty,
+        constraintPenalty,
+        dislikeSimilarityPenalty
       };
 
       return {
@@ -447,8 +595,15 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
     if (b.scoreTotal !== a.scoreTotal) {
       return b.scoreTotal - a.scoreTotal;
     }
+    const foodReviewDelta = foodReviewSortScore(b) - foodReviewSortScore(a);
+    if (foodReviewDelta !== 0) {
+      return foodReviewDelta;
+    }
     if (a.totalExpectedMinutes !== b.totalExpectedMinutes) {
       return a.totalExpectedMinutes - b.totalExpectedMinutes;
+    }
+    if ((a.distanceMeters || 0) !== (b.distanceMeters || 0)) {
+      return (a.distanceMeters || 0) - (b.distanceMeters || 0);
     }
     if (b.metadataConfidence !== a.metadataConfidence) {
       return b.metadataConfidence - a.metadataConfidence;

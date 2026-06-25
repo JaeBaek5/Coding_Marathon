@@ -126,7 +126,7 @@ describe('Domain Contracts & Schemas Validation', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject total time minutes outside the range of 20 to 60', () => {
+  it('should reject total time minutes below the minimum', () => {
     const lowTimeSlot = {
       mode: 'normal',
       mealPeriod: 'lunch',
@@ -143,7 +143,7 @@ describe('Domain Contracts & Schemas Validation', () => {
       mode: 'normal',
       mealPeriod: 'lunch',
       budgetPerPersonKrw: 10000,
-      totalTimeMinutes: 61,
+      totalTimeMinutes: 480,
       transportMode: 'walk',
       excludedFoods: [],
       partyContext: '상사',
@@ -152,7 +152,7 @@ describe('Domain Contracts & Schemas Validation', () => {
     };
 
     expect(SlotSchema.safeParse(lowTimeSlot).success).toBe(false);
-    expect(SlotSchema.safeParse(highTimeSlot).success).toBe(false);
+    expect(SlotSchema.safeParse(highTimeSlot).success).toBe(true);
   });
 
   it('should validate a complete and valid slot object', () => {
@@ -255,9 +255,20 @@ describe('Domain Contracts & Schemas Validation', () => {
       questions: [
         {
           field: 'budgetPerPersonKrw',
-          label: '예산은 어느 정도로 생각하시나요?'
+          label: '예산은 어느 정도로 생각하시나요?',
+          options: [
+            { value: 10000, label: '1만원' },
+            { value: 20000, label: '2만원' }
+          ]
         },
-        { field: 'vibe', label: '어떤 분위기를 원하시나요?' }
+        {
+          field: 'vibe',
+          label: '어떤 분위기를 원하시나요?',
+          options: [
+            { value: '캐주얼', label: '캐주얼' },
+            { value: '조용한', label: '조용한' }
+          ]
+        }
       ]
     };
     const result = AlephMissingSlotOutputSchema.safeParse(mockOutput);

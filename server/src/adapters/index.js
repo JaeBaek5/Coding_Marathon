@@ -14,10 +14,21 @@ import {
 const naverLocal = new NaverLocalAdapter();
 const naverDirections = new NaverDirectionsAdapter();
 
-export async function searchNearbyCandidates(lat, lng, radius = 1000) {
-  const key = `nearby:${lat}:${lng}:${radius}`;
+export async function searchNearbyCandidates(lat, lng, radius = 1000, options = {}) {
+  const desiredFoods = Array.isArray(options.desiredFoods)
+    ? options.desiredFoods
+    : [];
+  const searchKeywords = Array.isArray(options.searchKeywords)
+    ? options.searchKeywords
+    : [];
+  const venuePreference = options.venuePreference || 'restaurant';
+  const key = `nearby:${lat}:${lng}:${radius}:${venuePreference}:${desiredFoods.join('|')}:${searchKeywords.join('|')}`;
   return cache.wrap(key, cacheTTLs.NEARBY, async () => {
-    const raw = await naverLocal.searchNearbyRestaurants(lat, lng, radius);
+    const raw = await naverLocal.searchNearbyRestaurants(lat, lng, radius, {
+      desiredFoods,
+      searchKeywords,
+      venuePreference
+    });
     const normalized = raw.map(normalizeNaverLocalItem);
     return deduplicateCandidates(normalized);
   });
@@ -28,6 +39,14 @@ export async function searchLocation(query) {
   return cache.wrap(key, cacheTTLs.LOCATION, async () => {
     const raw = await naverLocal.searchKeyword(query);
     return raw.map(normalizeNaverKeywordLocation);
+  });
+}
+
+export async function reverseGeocodeLocation(lat, lng) {
+  const key = `reverse:${lat}:${lng}`;
+  return cache.wrap(key, cacheTTLs.LOCATION, async () => {
+    const label = await naverLocal.reverseGeocode(lat, lng);
+    return { label };
   });
 }
 

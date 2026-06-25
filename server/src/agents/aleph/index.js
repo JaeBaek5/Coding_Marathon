@@ -7,19 +7,38 @@ import {
   SlotSchema,
   ErrorCodes
 } from '../../../../shared/contracts/schemas.js';
+import {
+  normalizeDesiredFoods,
+  normalizeFoodPreferenceScores,
+  buildSearchKeywords,
+  buildSearchKeywordsFromScores,
+  deriveFoodPreferenceScores
+} from '../../utils/foodPreference.js';
+import { buildDefaultQuestions } from './questionOptions.js';
+import { generateFollowUpQuestions } from './followUpQuestions.js';
+import { resolveSlotExceptions } from '../../services/slotExceptionResolver.js';
+import { ALEPH_LLM_TIMEOUT_MS } from '../../config/performance.js';
+import { fillMissingSlots, REFINEMENT_FIELDS } from './slotDefaults.js';
+import { mergeSlotsWithLlmPriority } from './slotMerge.js';
+import {
+  parseDeterministicQueryText,
+  parseSemanticQueryFallback
+} from './queryFallback.js';
+import {
+  buildVenueTextSources,
+  enrichSlotsWithVenueIntent
+} from '../../utils/venueGating.js';
+import { enrichSlotsWithHangoverIntent } from '../../utils/foodPreference.js';
+import {
+  applySelectedFoodCraving,
+  buildExcludedFoodsFromInference,
+  buildFoodCravingQuestion,
+  buildFoodPreferenceScoresFromInference,
+  inferFoodCravingsFromState,
+  shouldOfferFoodCravingQuestion
+} from './foodCravingInference.js';
 
-const MAX_ROUNDS = 2;
-const QUESTION_LABELS = {
-  mode: '현재 위치 기준 추천인지, 여행/선택 위치 기준 추천인지 알려주세요.',
-  location: '현재 위치 또는 선택한 위치 정보가 필요합니다.',
-  mealPeriod: '언제 드실 건가요? (아침/점심/저녁/야식)',
-  totalTimeMinutes: '전체 식사 가능 시간은 몇 분인가요? (20~60분)',
-  transportMode: '이동 수단을 알려주세요. (도보/차량)',
-  budgetPerPersonKrw: '1인당 예산은 얼마인가요?',
-  partyContext: '누구와 함께 식사하시나요?',
-  vibe: '원하는 분위기를 알려주세요.',
-  excludedFoods: '피하고 싶은 음식이 있으신가요? 없다면 없음이라고 알려주세요.'
-};
+const MAX_ROUNDS = 8;
 const FIELD_SCHEMAS = {
   mode: SlotSchema.shape.mode,
   mealPeriod: SlotSchema.shape.mealPeriod,
@@ -32,24 +51,27 @@ const FIELD_SCHEMAS = {
   location: SlotSchema.shape.location,
   venuePreference: SlotSchema.shape.venuePreference,
   jobContext: SlotSchema.shape.jobContext,
-  ageGroup: SlotSchema.shape.ageGroup
+  ageGroup: SlotSchema.shape.ageGroup,
+  desiredFoods: SlotSchema.shape.desiredFoods,
+  searchKeywords: SlotSchema.shape.searchKeywords,
+  foodPreferenceScores: SlotSchema.shape.foodPreferenceScores
 };
 
 export async function parseQuery(query, currentState = {}, round = 1) {
   if (round > MAX_ROUNDS) {
-    return {
-      status: 'error',
-      code: ErrorCodes.SESSION_EXPIRED,
-      message: 'Max rounds exceeded',
-      missingFields: []
-    };
+    return validateAndProcessSlots(fillMissingSlots(currentState), {
+      userQuery: query,
+      skipQuestions: true
+    });
   }
 
   const llmSlots = await parseQueryWithSharedClient(query);
-  const parsedSlots = {
-    ...sanitizeSlotProposal(llmSlots, { allowLocation: false }),
-    ...parseQueryText(query)
-  };
+  const llmSanitized = sanitizeSlotProposal(llmSlots, { allowLocation: false });
+  const parsedSlots = mergeSlotsWithLlmPriority(
+    llmSanitized,
+    parseDeterministicQueryText(query),
+    parseSemanticQueryFallback(query)
+  );
 
   const mergedSlots = { ...currentState };
   for (const key of Object.keys(AlephParseOutputSchema.shape)) {
@@ -58,40 +80,79 @@ export async function parseQuery(query, currentState = {}, round = 1) {
     }
   }
 
-  return validateAndProcessSlots(mergedSlots);
+  return validateAndProcessSlots(mergedSlots, { userQuery: query });
 }
 
-export async function processAnswers(answers, currentState = {}, round = 1) {
+export async function processAnswers(answers, currentState = {}, round = 1, options = {}) {
   if (round > MAX_ROUNDS) {
-    return {
-      status: 'error',
-      code: ErrorCodes.SESSION_EXPIRED,
-      message: 'Max rounds exceeded',
-      missingFields: []
-    };
+    return validateAndProcessSlots(fillMissingSlots(currentState), {
+      userQuery: options.userQuery || '',
+      skipQuestions: true
+    });
   }
 
-  const mergedSlots = { ...currentState };
   const normalizedAnswers = normalizeAnswerSlots(answers);
-  for (const [key, value] of Object.entries(normalizedAnswers)) {
-    mergedSlots[key] = value;
-  }
+  const mergedSlots = fillMissingSlots({
+    ...currentState,
+    ...normalizedAnswers
+  });
 
-  return validateAndProcessSlots(mergedSlots);
+  return validateAndProcessSlots(mergedSlots, {
+    userQuery: options.userQuery || '',
+    skipQuestions: options.skipQuestions === true
+  });
 }
 
-async function validateAndProcessSlots(mergedSlots) {
-  const normalizedSlots = sanitizeSlotProposal(mergedSlots, {
+async function validateAndProcessSlots(mergedSlots, context = {}) {
+  const userQuery = context.userQuery || '';
+  let workingSlots = mergedSlots;
+
+  if (Array.isArray(workingSlots.desiredFoods) && workingSlots.desiredFoods.length > 0) {
+    workingSlots = applySelectedFoodCraving(
+      workingSlots,
+      workingSlots.desiredFoods
+    );
+  }
+
+  const venueSources = buildVenueTextSources(workingSlots, userQuery);
+  const hangoverEnrichedSlots = enrichSlotsWithHangoverIntent(
+    workingSlots,
+    venueSources,
+    { onlyIfMissing: true }
+  );
+  const venueEnrichedSlots = enrichSlotsWithVenueIntent(
+    hangoverEnrichedSlots,
+    venueSources,
+    { onlyIfMissing: true }
+  );
+  const { slots: resolvedSlots } = await resolveSlotExceptions(
+    venueEnrichedSlots,
+    userQuery,
+    { useAi: context.useAi !== false }
+  );
+  const normalizedSlots = sanitizeSlotProposal(resolvedSlots, {
     allowLocation: true
   });
 
-  if (isInvalidTotalTime(normalizedSlots.totalTimeMinutes)) {
-    return {
-      status: 'error',
-      code: ErrorCodes.INVALID_TOTAL_TIME,
-      message: 'Total time must be between 20 and 60 minutes.',
-      missingFields: []
-    };
+  if (
+    context.skipQuestions !== true &&
+    shouldOfferFoodCravingQuestion(normalizedSlots, userQuery, context)
+  ) {
+    const inference = await inferFoodCravingsFromState(userQuery, normalizedSlots);
+    if (inference?.suggestions?.length === 3) {
+      const foodPreferenceScores = buildFoodPreferenceScoresFromInference(inference);
+      const excludedFoods = buildExcludedFoodsFromInference(inference);
+      return {
+        status: 'questions',
+        missingFields: ['desiredFoods'],
+        questions: [buildFoodCravingQuestion(inference)],
+        currentState: {
+          ...normalizedSlots,
+          foodPreferenceScores,
+          ...(excludedFoods.length ? { excludedFoods } : {})
+        }
+      };
+    }
   }
 
   const missingOrInvalidFields = getMissingOrInvalidFields(normalizedSlots);
@@ -114,7 +175,54 @@ async function validateAndProcessSlots(mergedSlots) {
     };
   }
 
-  const questionData = buildQuestionData(missingOrInvalidFields);
+  if (context.skipQuestions !== true && normalizedSlots.location) {
+    const withDefaults = fillMissingSlots(normalizedSlots);
+    const defaultedValidation = SlotSchema.safeParse(withDefaults);
+    if (defaultedValidation.success) {
+      return {
+        status: 'complete',
+        slots: {
+          ...defaultedValidation.data,
+          location: withDefaults.location
+        }
+      };
+    }
+  }
+
+  if (context.skipQuestions === true) {
+    const withDefaults = fillMissingSlots(normalizedSlots);
+    const defaultedValidation = SlotSchema.safeParse(withDefaults);
+    if (defaultedValidation.success) {
+      return {
+        status: 'complete',
+        slots: {
+          ...defaultedValidation.data,
+          location: withDefaults.location
+        }
+      };
+    }
+  }
+
+  if (context.refinementFields?.length) {
+    const questionData = await buildQuestionData(
+      context.refinementFields,
+      normalizedSlots,
+      context.userQuery || ''
+    );
+
+    return {
+      status: 'questions',
+      missingFields: questionData.missingFields,
+      questions: questionData.questions,
+      currentState: normalizedSlots
+    };
+  }
+
+  const questionData = await buildQuestionData(
+    missingOrInvalidFields,
+    normalizedSlots,
+    context.userQuery || ''
+  );
 
   return {
     status: 'questions',
@@ -126,15 +234,20 @@ async function validateAndProcessSlots(mergedSlots) {
 
 async function parseQueryWithSharedClient(query) {
   try {
-    const parseCompletion = await createAgentChatCompletion('aleph', {
-      messages: [
-        {
-          role: 'user',
-          content: query
-        }
-      ],
-      response_format: zodResponseFormat(AlephParseOutputSchema, 'slot_parsing')
-    });
+    const parseCompletion = await Promise.race([
+      createAgentChatCompletion('aleph', {
+        messages: [
+          {
+            role: 'user',
+            content: query
+          }
+        ],
+        response_format: zodResponseFormat(AlephParseOutputSchema, 'slot_parsing')
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('aleph_parse_timeout')), ALEPH_LLM_TIMEOUT_MS)
+      )
+    ]);
     const parseResult = AlephParseOutputSchema.safeParse(
       parseCompletion?.choices?.[0]?.message?.parsed
     );
@@ -147,85 +260,14 @@ async function parseQueryWithSharedClient(query) {
   return {};
 }
 
-function parseQueryText(query) {
-  const slots = {};
-  if (!query) return slots;
-
-  if (matchesAny(query, ['출장', '여행', 'travel', '선택 위치'])) {
-    slots.mode = 'travel';
-  } else if (matchesAny(query, ['현재 위치', '지금 위치', 'normal'])) {
-    slots.mode = 'normal';
-  }
-
-  if (matchesAny(query, ['아침', '조식', 'breakfast', '오전'])) {
-    slots.mealPeriod = 'breakfast';
-  } else if (matchesAny(query, ['점심', '중식', 'lunch'])) {
-    slots.mealPeriod = 'lunch';
-  } else if (matchesAny(query, ['저녁', '석식', 'dinner'])) {
-    slots.mealPeriod = 'dinner';
-  } else if (matchesAny(query, ['야식', 'late_night', '새벽', '늦은 밤'])) {
-    slots.mealPeriod = 'late_night';
-  }
-
-  const totalTimeMinutes = parseTimeMinutes(query);
-  if (totalTimeMinutes !== null) {
-    slots.totalTimeMinutes = totalTimeMinutes;
-  }
-
-  const budgetPerPersonKrw = parseBudgetKrw(query);
-  if (budgetPerPersonKrw !== null) {
-    slots.budgetPerPersonKrw = budgetPerPersonKrw;
-  }
-
-  if (matchesAny(query, ['도보', '걸어서', '뚜벅이', '걸을'])) {
-    slots.transportMode = 'walk';
-  } else if (matchesAny(query, ['차로', '운전', '자동차', '차량'])) {
-    slots.transportMode = 'drive';
-  }
-
-  if (query.includes('친구')) {
-    slots.partyContext = '친구';
-  } else if (query.includes('연인')) {
-    slots.partyContext = '연인';
-  } else if (query.includes('가족')) {
-    slots.partyContext = '가족';
-  } else if (query.includes('혼밥')) {
-    slots.partyContext = '혼밥';
-  }
-
-  if (query.includes('대학생')) {
-    slots.ageGroup = '대학생';
-  }
-
-  if (
-    query.includes('캐주얼') &&
-    (query.includes('얘기') || query.includes('대화'))
-  ) {
-    slots.vibe = '캐주얼하고 편하게 대화 가능한 분위기';
-  } else if (query.includes('캐주얼')) {
-    slots.vibe = '캐주얼';
-  } else if (query.includes('조용')) {
-    slots.vibe = '조용한';
-  }
-
-  if (query.includes('매운') && matchesAny(query, ['빼고', '제외', '피하고'])) {
-    slots.excludedFoods = ['매운 음식'];
-  } else if (matchesAny(query, ['없음', '없어', '다 잘먹'])) {
-    slots.excludedFoods = [];
-  }
-
-  // Venue intent — explicit user request overrides the default restaurant filter
-  if (matchesAny(query, ['카페', '커피', '디저트'])) {
-    slots.venuePreference = 'cafe';
-  } else if (matchesAny(query, ['술집', '술 한잔', '맥주', '와인', '호프', '포차', '펍'])) {
-    slots.venuePreference = 'bar';
-  }
-
-  return slots;
+function matchesAny(value, terms) {
+  return terms.some((term) => value.includes(term));
 }
 
 function sanitizeSlotProposal(slots, { allowLocation }) {
   const sanitized = {};
+  const mergedDesiredFoods = normalizeDesiredFoods(slots?.desiredFoods);
+  const mergedFoodScores = normalizeFoodPreferenceScores(slots?.foodPreferenceScores);
   for (const [key, value] of Object.entries(slots || {})) {
     if (value === null || value === undefined || !FIELD_SCHEMAS[key]) {
       continue;
@@ -241,6 +283,22 @@ function sanitizeSlotProposal(slots, { allowLocation }) {
     const result = FIELD_SCHEMAS[key].safeParse(normalizedValue);
     if (result.success) {
       sanitized[key] = key === 'location' ? normalizedValue : result.data;
+    }
+  }
+  if (mergedDesiredFoods.length > 0) {
+    sanitized.desiredFoods = mergedDesiredFoods;
+  }
+  if (mergedFoodScores.length > 0) {
+    sanitized.foodPreferenceScores = mergedFoodScores;
+  }
+  if (!sanitized.searchKeywords?.length) {
+    if (mergedFoodScores.length > 0) {
+      sanitized.searchKeywords = buildSearchKeywordsFromScores(
+        mergedFoodScores,
+        Array.isArray(slots?.searchKeywords) ? slots.searchKeywords : []
+      );
+    } else if (mergedDesiredFoods.length > 0) {
+      sanitized.searchKeywords = buildSearchKeywords(mergedDesiredFoods);
     }
   }
   return sanitized;
@@ -291,53 +349,43 @@ function getMissingOrInvalidFields(slots) {
   return missing;
 }
 
-function isInvalidTotalTime(totalTimeMinutes) {
-  return (
-    totalTimeMinutes !== undefined &&
-    totalTimeMinutes !== null &&
-    (totalTimeMinutes < 20 || totalTimeMinutes > 60)
+
+function buildDefaultQuestionsWithSchemas(missingFields, partialSlots, userQuery) {
+  return buildDefaultQuestions(
+    missingFields,
+    partialSlots,
+    userQuery,
+    FIELD_SCHEMAS
   );
 }
 
-function buildQuestionData(missingFields) {
+async function buildQuestionData(missingFields, partialSlots, userQuery) {
+  const questions = await generateFollowUpQuestions({
+    missingFields,
+    partialSlots,
+    userQuery,
+    fieldSchemas: FIELD_SCHEMAS,
+    buildDefaultQuestions: buildDefaultQuestionsWithSchemas
+  });
   const payload = {
     missingFields,
-    questions: missingFields.map((field) => ({
-      field,
-      label: QUESTION_LABELS[field] || `${field} 정보를 입력해 주세요.`
-    }))
+    questions
   };
   const result = AlephMissingSlotOutputSchema.safeParse(payload);
   return result.success ? result.data : payload;
 }
 
-function parseTimeMinutes(query) {
-  if (/(한|1)\s*시간/.test(query)) {
-    return 60;
-  }
-  const hourMatch = query.match(/(\d+)\s*시간/);
-  if (hourMatch) {
-    return Number.parseInt(hourMatch[1], 10) * 60;
-  }
-  const minuteMatch = query.match(/(\d+)\s*분/);
-  if (minuteMatch) {
-    return Number.parseInt(minuteMatch[1], 10);
-  }
-  return null;
-}
+export async function buildRefinementQuestionResponse(slots, userQuery = '') {
+  const questionData = await buildQuestionData(
+    REFINEMENT_FIELDS,
+    slots,
+    userQuery
+  );
 
-function parseBudgetKrw(query) {
-  const rawWonMatch = query.match(/(\d{4,})\s*원/);
-  if (rawWonMatch) {
-    return Number.parseInt(rawWonMatch[1], 10);
-  }
-  const manWonMatch = query.match(/(\d+)\s*만\s*원/);
-  if (manWonMatch) {
-    return Number.parseInt(manWonMatch[1], 10) * 10000;
-  }
-  return null;
-}
-
-function matchesAny(value, terms) {
-  return terms.some((term) => value.includes(term));
+  return {
+    status: 'questions',
+    missingFields: questionData.missingFields,
+    questions: questionData.questions,
+    currentState: slots
+  };
 }

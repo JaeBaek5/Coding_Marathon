@@ -1,5 +1,11 @@
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 export const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
+export const OPENROUTER_ROLE_DEFAULTS = {
+  orchestrator: 'google/gemini-2.5-flash-lite',
+  aleph: 'anthropic/claude-sonnet-4.6',
+  bet: 'google/gemini-2.5-flash',
+  gimel: 'anthropic/claude-sonnet-4.6'
+};
 
 function envValue(env, name) {
   const value = env[name];
@@ -36,12 +42,23 @@ export function loadLLMConfig() {
   const sharedModel =
     envValue(process.env, 'OPENROUTER_MODEL') ||
     envValue(process.env, 'LLM_MODEL') ||
-    (openRouterApiKey ? OPENROUTER_DEFAULT_MODEL : null);
+    null;
   const orchestrator =
-    envValue(process.env, 'LLM_MODEL_ORCHESTRATOR') || sharedModel;
-  const aleph = envValue(process.env, 'LLM_MODEL_ALEPH') || sharedModel;
-  const gimel = envValue(process.env, 'LLM_MODEL_GIMEL') || sharedModel;
-  const bet = envValue(process.env, 'LLM_MODEL_BET') || sharedModel;
+    envValue(process.env, 'LLM_MODEL_ORCHESTRATOR') ||
+    sharedModel ||
+    (openRouterApiKey ? OPENROUTER_ROLE_DEFAULTS.orchestrator : null);
+  const aleph =
+    envValue(process.env, 'LLM_MODEL_ALEPH') ||
+    sharedModel ||
+    (openRouterApiKey ? OPENROUTER_ROLE_DEFAULTS.aleph : null);
+  const gimel =
+    envValue(process.env, 'LLM_MODEL_GIMEL') ||
+    sharedModel ||
+    (openRouterApiKey ? OPENROUTER_ROLE_DEFAULTS.gimel : null);
+  const bet =
+    envValue(process.env, 'LLM_MODEL_BET') ||
+    sharedModel ||
+    (openRouterApiKey ? OPENROUTER_ROLE_DEFAULTS.bet : null);
   const timeoutMs = parseTimeoutMs(envValue(process.env, 'LLM_TIMEOUT_MS'));
 
   if (!apiKey) {
@@ -57,6 +74,9 @@ export function loadLLMConfig() {
   }
   if (!gimel) {
     throw new Error('Missing required LLM config: LLM_MODEL_GIMEL');
+  }
+  if (!bet) {
+    throw new Error('Missing required LLM config: LLM_MODEL_BET');
   }
 
   return {

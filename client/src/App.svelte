@@ -1,16 +1,21 @@
 <script>
-  import { createSessionStore } from './lib/stores/session.svelte.js';
+  import { onMount } from 'svelte';
+  import { session } from './lib/stores/session.svelte.js';
   import Header from './lib/components/Header.svelte';
   import QueryForm from './lib/components/QueryForm.svelte';
   import QuestionForm from './lib/components/QuestionForm.svelte';
   import ErrorCard from './lib/components/ErrorCard.svelte';
   import MapPlaceholder from './lib/components/MapPlaceholder.svelte';
   import ResultsList from './lib/components/ResultsList.svelte';
+  import ActivityStatusBar from './lib/components/ActivityStatusBar.svelte';
 
-  const session = createSessionStore();
+  onMount(() => {
+    void session.bootstrapLocation();
+  });
 
   function handleReset() {
     session.reset();
+    void session.bootstrapLocation();
   }
 </script>
 
@@ -34,6 +39,8 @@
       {:else if session.status === 'error'}
         <ErrorCard error={session.error} {session} />
       {/if}
+
+      <ActivityStatusBar {session} />
     </div>
 
     <div class="map-pane">

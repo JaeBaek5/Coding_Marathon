@@ -48,6 +48,208 @@ describe('Aleph Agent', () => {
       expect(result.slots.mealPeriod).toBe('lunch');
     });
 
+    it('sets bar venue preference when the user wants to drink alcohol', async () => {
+      mockCreate.mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              parsed: {
+                mode: 'normal',
+                location: { lat: 37.5, lng: 127.0 },
+                mealPeriod: 'dinner',
+                totalTimeMinutes: 120,
+                transportMode: 'walk',
+                budgetPerPersonKrw: 20000,
+                partyContext: '친구',
+                vibe: '캐주얼',
+                excludedFoods: [],
+                venuePreference: 'bar',
+                desiredFoods: null,
+                searchKeywords: ['술집', '호프']
+              }
+            }
+          }
+        ]
+      });
+
+      const result = await parseQuery(
+        '친구랑 술마시고 싶다',
+        { location: structuredLocation },
+        1
+      );
+
+      expect(result.status).toBe('complete');
+      expect(result.slots.venuePreference).toBe('bar');
+      expect(result.slots.searchKeywords).toContain('술집');
+    });
+
+    it('sets hangover food preference when the user wants recovery after drinking', async () => {
+      mockCreate.mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              parsed: {
+                mode: 'normal',
+                location: { lat: 37.5, lng: 127.0 },
+                mealPeriod: 'lunch',
+                totalTimeMinutes: 60,
+                transportMode: 'walk',
+                budgetPerPersonKrw: 15000,
+                partyContext: '친구',
+                vibe: '캐주얼',
+                excludedFoods: [],
+                venuePreference: 'restaurant',
+                desiredFoods: ['해장'],
+                searchKeywords: ['해장국', '국밥'],
+                foodPreferenceScores: [
+                  { food: '해장', score: 95 },
+                  { food: '국밥', score: 92 },
+                  { food: '치킨', score: 10 }
+                ]
+              }
+            }
+          }
+        ]
+      });
+
+      const result = await parseQuery(
+        '어제 술마셔서 해장 하고 싶다',
+        { location: structuredLocation },
+        1
+      );
+
+      expect(result.status).toBe('complete');
+      expect(result.slots.venuePreference).toBe('restaurant');
+      expect(result.slots.desiredFoods).toContain('해장');
+      expect(result.slots.searchKeywords).toContain('해장국');
+      expect(
+        result.slots.foodPreferenceScores?.find((item) => item.food === '치킨')?.score
+      ).toBeLessThanOrEqual(15);
+    });
+
+    it('asks for LLM food cravings when the user only describes their state', async () => {
+      mockCreate
+        .mockResolvedValueOnce({
+          choices: [
+            {
+              message: {
+                parsed: {
+                  mode: 'normal',
+                  mealPeriod: 'lunch',
+                  totalTimeMinutes: null,
+                  transportMode: null,
+                  budgetPerPersonKrw: null,
+                  partyContext: null,
+                  vibe: null,
+                  excludedFoods: null,
+                  venuePreference: null,
+                  desiredFoods: null,
+                  searchKeywords: null,
+                  foodPreferenceScores: null
+                }
+              }
+            }
+          ]
+        })
+        .mockResolvedValueOnce({
+          choices: [
+            {
+              message: {
+                parsed: {
+                  stateSummary: '술 마신 다음 날 피곤한 상태',
+                  suggestions: [
+                    { food: '국밥', label: '따뜻한 국밥', score: 95 },
+                    { food: '해장', label: '얼큰한 해장국', score: 92 },
+                    { food: '죽', label: '속 편한 죽', score: 80 }
+                  ],
+                  avoidSuggestions: [
+                    { food: '치킨', label: '치킨·튀김', score: 12 },
+                    { food: '피자', label: '피자', score: 8 }
+                  ]
+                }
+              }
+            }
+          ]
+        });
+
+      const result = await parseQuery(
+        '어제 술 마셔서 머리 아파',
+        { location: structuredLocation },
+        1
+      );
+
+      expect(result.status).toBe('questions');
+      expect(result.missingFields).toEqual(['desiredFoods']);
+      expect(result.questions).toHaveLength(1);
+      expect(result.questions[0].options).toHaveLength(3);
+      expect(result.questions[0].options[0].label).toBe('따뜻한 국밥');
+      expect(result.questions[0].avoidSuggestions).toHaveLength(2);
+      expect(result.currentState.foodPreferenceScores).toHaveLength(5);
+      expect(result.currentState.excludedFoods).toContain('치킨');
+    });
+
+    it('falls back to rule-based hangover intent when LLM parse is empty', async () => {
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { parsed: {} } }]
+      });
+
+      const result = await parseQuery(
+        '어제 술마셔서 해장 하고 싶다',
+        {
+          mode: 'normal',
+          location: structuredLocation,
+          mealPeriod: 'lunch',
+          totalTimeMinutes: 60,
+          transportMode: 'walk',
+          budgetPerPersonKrw: 15000,
+          partyContext: '친구',
+          vibe: '캐주얼',
+          excludedFoods: []
+        },
+        1
+      );
+
+      expect(result.status).toBe('complete');
+      expect(result.slots.venuePreference).toBe('restaurant');
+      expect(result.slots.desiredFoods).toContain('해장');
+      expect(result.slots.searchKeywords).toContain('해장국');
+    });
+
+    it('prefers LLM semantic slots over rule-based semantic fallback', async () => {
+      mockCreate.mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              parsed: {
+                mode: 'normal',
+                location: { lat: 37.5, lng: 127.0 },
+                mealPeriod: 'lunch',
+                totalTimeMinutes: 60,
+                transportMode: 'walk',
+                budgetPerPersonKrw: 15000,
+                partyContext: '연인',
+                vibe: '조용한',
+                excludedFoods: [],
+                venuePreference: 'restaurant',
+                desiredFoods: ['일식'],
+                searchKeywords: ['초밥']
+              }
+            }
+          }
+        ]
+      });
+
+      const result = await parseQuery(
+        '친구랑 고기 먹고 싶다',
+        { location: structuredLocation },
+        1
+      );
+
+      expect(result.slots.partyContext).toBe('연인');
+      expect(result.slots.desiredFoods).toEqual(['일식']);
+      expect(result.slots.searchKeywords).toContain('초밥');
+    });
+
     it('should detect missing slots and generate questions in priority order', async () => {
       mockCreate.mockResolvedValueOnce({
         choices: [
@@ -74,10 +276,23 @@ describe('Aleph Agent', () => {
           {
             message: {
               parsed: {
-                missingFields: ['mealPeriod', 'totalTimeMinutes'],
                 questions: [
-                  { field: 'mealPeriod', label: '언제 드실 건가요?' },
-                  { field: 'totalTimeMinutes', label: '시간은 얼마나 있나요?' }
+                  {
+                    field: 'mealPeriod',
+                    label: '지금은 언제 드실 계획인가요?',
+                    options: [
+                      { label: '점심', value: 'lunch' },
+                      { label: '저녁', value: 'dinner' }
+                    ]
+                  },
+                  {
+                    field: 'totalTimeMinutes',
+                    label: '시간은 얼마나 있나요?',
+                    options: [
+                      { label: '30분', value: 30 },
+                      { label: '1시간', value: 60 }
+                    ]
+                  }
                 ]
               }
             }
@@ -100,15 +315,21 @@ describe('Aleph Agent', () => {
         'excludedFoods'
       ]);
       expect(result.questions).toHaveLength(8);
+      expect(result.questions[1].field).toBe('mealPeriod');
+      expect(result.questions[1].options?.length).toBeGreaterThan(0);
     });
 
-    it('should throw or return error if max rounds exceeded', async () => {
-      const result = await parseQuery('query text', {}, 3);
-      expect(result.status).toBe('error');
-      expect(result.code).toBe('SESSION_EXPIRED');
+    it('fills defaults when parse round exceeds the soft limit', async () => {
+      const result = await parseQuery(
+        'query text',
+        { mode: 'normal', location: { lat: 37.5, lng: 127.0, source: 'browser-geolocation' } },
+        9
+      );
+      expect(result.status).toBe('complete');
+      expect(result.slots.mealPeriod).toBe('lunch');
     });
 
-    it('should handle invalid totalTimeMinutes (out of range)', async () => {
+    it('should auto-resolve totalTimeMinutes below the minimum', async () => {
       mockCreate.mockResolvedValueOnce({
         choices: [
           {
@@ -131,8 +352,8 @@ describe('Aleph Agent', () => {
 
       const result = await parseQuery('query text', { location: structuredLocation }, 1);
 
-      expect(result.status).toBe('error');
-      expect(result.code).toBe('INVALID_TOTAL_TIME');
+      expect(result.status).toBe('complete');
+      expect(result.slots.totalTimeMinutes).toBe(20);
     });
   });
 
@@ -284,7 +505,7 @@ describe('Aleph Agent', () => {
       expect(result.currentState.location).toBeUndefined();
     });
 
-    it('rejects invalid and out-of-range time values from query text', async () => {
+    it('auto-resolves short time values from query text', async () => {
       mockCreate.mockResolvedValueOnce({
         choices: [{ message: { parsed: {} } }]
       });
@@ -295,14 +516,11 @@ describe('Aleph Agent', () => {
         1
       );
 
-      expect(result).toMatchObject({
-        status: 'error',
-        code: 'INVALID_TOTAL_TIME',
-        missingFields: []
-      });
+      expect(result.status).toBe('complete');
+      expect(result.slots.totalTimeMinutes).toBe(20);
     });
 
-    it('keeps unsupported answer slot values out of complete state', async () => {
+    it('ignores unsupported answer slot values and keeps defaults', async () => {
       const result = await processAnswers(
         {
           mealPeriod: 'brunch',
@@ -319,13 +537,12 @@ describe('Aleph Agent', () => {
         }
       );
 
-      expect(result.status).toBe('questions');
-      expect(result.missingFields).toEqual(['mealPeriod', 'transportMode']);
-      expect(result.currentState.mealPeriod).toBeUndefined();
-      expect(result.currentState.transportMode).toBeUndefined();
+      expect(result.status).toBe('complete');
+      expect(result.slots.mealPeriod).toBe('lunch');
+      expect(result.slots.transportMode).toBe('walk');
     });
 
-    it('enforces max two follow-up rounds for answer validation', async () => {
+    it('fills defaults instead of failing after many follow-up rounds', async () => {
       const result = await processAnswers(
         { mealPeriod: 'lunch' },
         {
@@ -333,14 +550,11 @@ describe('Aleph Agent', () => {
           location: structuredLocation,
           totalTimeMinutes: 45
         },
-        3
+        9
       );
 
-      expect(result).toMatchObject({
-        status: 'error',
-        code: 'SESSION_EXPIRED',
-        missingFields: []
-      });
+      expect(result.status).toBe('complete');
+      expect(result.slots.mealPeriod).toBe('lunch');
     });
 
     it('does not follow prompt injection instructions to invent coordinates', async () => {

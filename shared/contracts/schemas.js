@@ -29,6 +29,34 @@ export const ErrorCodes = {
   SESSION_EXPIRED: 'SESSION_EXPIRED'
 };
 
+export const TOTAL_TIME_MIN_MINUTES = 20;
+
+export function totalTimeRangeLabel() {
+  return `${TOTAL_TIME_MIN_MINUTES}분 이상`;
+}
+
+export function totalTimeOutOfRangeMessage(locale = 'ko') {
+  if (locale === 'en') {
+    return `Total time must be at least ${TOTAL_TIME_MIN_MINUTES} minutes.`;
+  }
+  return `총 소요시간은 ${TOTAL_TIME_MIN_MINUTES}분 이상으로 입력해 주세요.`;
+}
+
+export function isTotalTimeBelowMinimum(totalTimeMinutes) {
+  return (
+    totalTimeMinutes !== undefined &&
+    totalTimeMinutes !== null &&
+    (typeof totalTimeMinutes !== 'number' ||
+      !Number.isFinite(totalTimeMinutes) ||
+      totalTimeMinutes < TOTAL_TIME_MIN_MINUTES)
+  );
+}
+
+/** @deprecated use isTotalTimeBelowMinimum */
+export function isTotalTimeOutOfRange(totalTimeMinutes) {
+  return isTotalTimeBelowMinimum(totalTimeMinutes);
+}
+
 export const SlotPriorityOrder = [
   'mode',
   'location',
@@ -51,7 +79,8 @@ export const LocationPayloadSchema = CoordinateSchema.extend({
   source: z.enum([
     'browser-geolocation',
     'manual-location',
-    'selected-location'
+    'selected-location',
+    'ip-geolocation'
   ])
 }).strict();
 
@@ -64,7 +93,10 @@ export const CanonicalExpectedSlotBundleSchema = z
       MealPeriod.DINNER,
       MealPeriod.LATE_NIGHT
     ]),
-    totalTimeMinutes: z.number().int().min(20).max(60),
+    totalTimeMinutes: z
+      .number()
+      .int()
+      .min(TOTAL_TIME_MIN_MINUTES),
     transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
     budgetPerPersonKrw: z.number().int().nonnegative(),
     partyContext: z.string(),
@@ -87,6 +119,29 @@ export const VenuePreference = {
   ANY: 'any'
 };
 
+export const FoodPreferenceScoreSchema = z.object({
+  food: z.string().min(1),
+  score: z.number().int().min(0).max(100)
+});
+
+export const AlephFoodCravingSuggestionSchema = z.object({
+  food: z.string().min(1),
+  label: z.string().min(1),
+  score: z.number().int().min(50).max(100)
+});
+
+export const AlephFoodCravingAvoidSchema = z.object({
+  food: z.string().min(1),
+  label: z.string().min(1),
+  score: z.number().int().min(0).max(49)
+});
+
+export const AlephFoodCravingInferenceSchema = z.object({
+  stateSummary: z.string().min(1).max(120),
+  suggestions: z.array(AlephFoodCravingSuggestionSchema).length(3),
+  avoidSuggestions: z.array(AlephFoodCravingAvoidSchema).min(2).max(4)
+});
+
 export const SlotSchema = z.object({
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]),
   mealPeriod: z.enum([
@@ -99,8 +154,10 @@ export const SlotSchema = z.object({
   totalTimeMinutes: z
     .number()
     .int()
-    .min(20, '총 소요시간은 최소 20분이어야 합니다.')
-    .max(60, '총 소요시간은 최대 60분이어야 합니다.'),
+    .min(
+      TOTAL_TIME_MIN_MINUTES,
+      `총 소요시간은 최소 ${TOTAL_TIME_MIN_MINUTES}분이어야 합니다.`
+    ),
   transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
   excludedFoods: z.array(z.string()),
   partyContext: z.string(),
@@ -115,12 +172,16 @@ export const SlotSchema = z.object({
     ])
     .optional(),
   jobContext: z.string().optional().nullable(),
-  ageGroup: z.string().optional().nullable()
+  ageGroup: z.string().optional().nullable(),
+  desiredFoods: z.array(z.string()).optional(),
+  searchKeywords: z.array(z.string()).optional(),
+  foodPreferenceScores: z.array(FoodPreferenceScoreSchema).max(16).optional()
 });
 
 export const RecommendationRequestSchema = z.object({
   query: z.string().min(1, 'Query is required'),
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]).default(Mode.NORMAL),
+  sessionId: z.string().min(1).optional().nullable(),
   location: LocationPayloadSchema.optional().nullable(),
   userLocation: CoordinateSchema.optional().nullable(),
   selectedLocation: z
@@ -155,9 +216,15 @@ export const NormalizedCandidateSchema = z.object({
 
   priceLevel: z.null().default(null),
   openingHours: z.null().default(null),
-  rating: z.null().default(null),
-  reviewCount: z.null().default(null),
-  reviewSummary: z.null().default(null),
+  rating: z.number().min(0).max(5).nullable().optional(),
+  reviewCount: z.number().int().nonnegative().nullable().optional(),
+  reviewSummary: z
+    .object({
+      pros: z.string().nullable(),
+      cons: z.string().nullable()
+    })
+    .nullable()
+    .optional(),
 
   transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
   oneWayRouteMinutes: z.number().int().nonnegative(),
@@ -214,16 +281,31 @@ export const BetSearchOutputSchema = z
   })
   .strict();
 
+export const FollowUpQuestionOptionSchema = z.object({
+  label: z.string().min(1),
+  value: z.union([z.string(), z.number(), z.array(z.string())])
+});
+
+export const FollowUpQuestionSchema = z.object({
+  field: z.string(),
+  label: z.string(),
+  options: z.array(FollowUpQuestionOptionSchema).min(1).max(8).optional(),
+  avoidSuggestions: z
+    .array(
+      z.object({
+        food: z.string().min(1),
+        label: z.string().min(1),
+        score: z.number().int().min(0).max(49)
+      })
+    )
+    .optional()
+});
+
 export const QuestionsResponseSchema = z.object({
   status: z.literal('questions'),
   sessionId: z.string(),
   missingFields: z.array(z.string()),
-  questions: z.array(
-    z.object({
-      field: z.string(),
-      label: z.string()
-    })
-  )
+  questions: z.array(FollowUpQuestionSchema)
 });
 
 export const ResultsResponseSchema = z.object({
@@ -283,17 +365,29 @@ export const AlephParseOutputSchema = z.object({
     .nullable()
     .default(null),
   jobContext: z.string().nullable().default(null),
-  ageGroup: z.string().nullable().default(null)
+  ageGroup: z.string().nullable().default(null),
+  desiredFoods: z.array(z.string()).nullable().default(null),
+  searchKeywords: z.array(z.string()).nullable().default(null),
+  foodPreferenceScores: z
+    .array(FoodPreferenceScoreSchema)
+    .max(16)
+    .nullable()
+    .default(null)
+});
+
+export const AlephFollowUpQuestionsSchema = z.object({
+  questions: z.array(
+    z.object({
+      field: z.string(),
+      label: z.string().min(1),
+      options: z.array(FollowUpQuestionOptionSchema).min(2).max(8)
+    })
+  )
 });
 
 export const AlephMissingSlotOutputSchema = z.object({
   missingFields: z.array(z.string()),
-  questions: z.array(
-    z.object({
-      field: z.string(),
-      label: z.string()
-    })
-  )
+  questions: z.array(FollowUpQuestionSchema)
 });
 
 export const GimelInputAllowlistSchema = z
@@ -317,6 +411,17 @@ export const GimelReasonOutputSchema = z.object({
     z.object({
       id: z.string(),
       reason: z.string()
+    })
+  )
+});
+
+export const BetCandidateLLMScoreOutputSchema = z.object({
+  scores: z.array(
+    z.object({
+      id: z.string(),
+      relevanceScore: z.number().min(0).max(100),
+      sentimentScore: z.number().min(0).max(100),
+      rationale: z.string().max(240)
     })
   )
 });

@@ -35,9 +35,13 @@
   <div class="results-header">
     <h2 class="title">추천 식당</h2>
     <p class="subtitle">
-      {session.results.length === 1
-        ? '조건에 맞는 식당 1곳을 우선 확인합니다.'
-        : `${session.results.length}곳의 후보를 표시합니다.`}
+      {#if session.displayMode === 'triple'}
+        마음에 드는 곳을 골라보세요. 후보 {session.results.length}곳입니다.
+      {:else if session.results.length > 0}
+        조건에 맞는 식당을 하나씩 보여드립니다. 마음에 들지 않으면 싫어요를 눌러주세요.
+      {:else}
+        추천 결과가 없습니다.
+      {/if}
     </p>
   </div>
 

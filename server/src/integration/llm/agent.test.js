@@ -20,6 +20,7 @@ describe('LLM Swarm Runtime Integration', () => {
     vi.stubEnv('LLM_MODEL_ORCHESTRATOR', 'integration-model');
     vi.stubEnv('LLM_MODEL_ALEPH', 'integration-aleph');
     vi.stubEnv('LLM_MODEL_GIMEL', 'integration-gimel');
+    vi.stubEnv('LLM_MODEL_BET', 'integration-bet');
 
     const { client, config } = getLLMClient();
 

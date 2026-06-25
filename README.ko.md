@@ -13,6 +13,7 @@ Svelte 클라이언트와 Express 백엔드로 구성된 멀티 에이전트 음
 | [docs/MAP_RUNTIME.ko.md](docs/MAP_RUNTIME.ko.md) | 지도 준비 상태, 공개 설정, SDK 로딩, 클라이언트 지도 상태. |
 | [docs/MAP_DATA_FLOW.ko.md](docs/MAP_DATA_FLOW.ko.md) | 위치 검색, 프로바이더 어댑터, 경로 흐름, 랭킹 입력값. |
 | [docs/MAP_GROUNDING.ko.md](docs/MAP_GROUNDING.ko.md) | 표준 리뷰 URL, 추출 규칙, 근거 기반(grounded) 사유 제약. |
+| [docs/IMPLEMENTATION_NOTES.ko.md](docs/IMPLEMENTATION_NOTES.ko.md) | 추가 질문 UI·술집/샤브 의도 등 최근 수정 참고 및 재발 시 체크리스트. |
 
 ## 검증 명령어
 

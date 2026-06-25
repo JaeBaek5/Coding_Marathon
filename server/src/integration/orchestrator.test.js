@@ -226,6 +226,7 @@ describe('Orchestrator Supervisor Integration Tests', () => {
     expect(res.status).toBe('results');
     expect(res.currentRecommendation).toBeDefined();
     expect(res.results).toHaveLength(1);
+    expect(res.displayMode).toBe('single');
     expect(res.currentRecommendation.id).toBe('p-1');
     expect(res.candidatePool).toHaveLength(5);
     expect(res.eligibleCount).toBe(5);
@@ -236,7 +237,7 @@ describe('Orchestrator Supervisor Integration Tests', () => {
     expect(session.likedCandidateIds).toEqual([]);
   });
 
-  it('should advance to next recommendation on first dislike and reveal full remaining pool on second dislike', async () => {
+  it('should remove disliked candidates from the visible pool', async () => {
     const { orchestrator } = createOrchestrator();
 
     const initial = await orchestrator.processRequest({
@@ -255,6 +256,8 @@ describe('Orchestrator Supervisor Integration Tests', () => {
 
     expect(afterFirstDislike.status).toBe('results');
     expect(afterFirstDislike.results).toHaveLength(1);
+    expect(afterFirstDislike.displayMode).toBe('single');
+    expect(afterFirstDislike.results.map((item) => item.id)).not.toContain('p-1');
     expect(afterFirstDislike.currentRecommendation.id).toBe('p-2');
 
     const afterSecondDislike = await orchestrator.processAnswers(sessionId, {
@@ -265,12 +268,23 @@ describe('Orchestrator Supervisor Integration Tests', () => {
 
     expect(afterSecondDislike.status).toBe('results');
     expect(afterSecondDislike.results).toHaveLength(3);
-    expect(afterSecondDislike.currentRecommendation.id).toBe('p-3');
+    expect(afterSecondDislike.displayMode).toBe('triple');
+    expect(afterSecondDislike.results.map((item) => item.id)).not.toContain('p-2');
     expect(afterSecondDislike.candidatePool).toHaveLength(3);
 
+    const afterThirdDislike = await orchestrator.processAnswers(sessionId, {
+      answers: {
+        action: 'dislike',
+        candidateId: 'p-3'
+      }
+    });
+
+    expect(afterThirdDislike.status).toBe('questions');
+    expect(afterThirdDislike.questions?.length).toBeGreaterThan(0);
+
     const session = sessions.get(sessionId);
-    expect(session.dislikedCandidateIds).toEqual(['p-1', 'p-2']);
-    expect(session.feedbackDislikeCount).toBe(2);
+    expect(session.dislikedCandidateIds).toEqual(['p-1', 'p-2', 'p-3']);
+    expect(session.feedbackDislikeCount).toBe(3);
   });
 
   it('should persist like/dislike identifiers in session state', async () => {
@@ -351,7 +365,7 @@ describe('Orchestrator Supervisor Integration Tests', () => {
       answerResult: {
         status: 'error',
         code: ErrorCodes.INVALID_TOTAL_TIME,
-        message: 'Total time must be between 20 and 60 minutes.',
+        message: 'Total time must be at least 20 minutes.',
         missingFields: []
       }
     });

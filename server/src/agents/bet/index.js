@@ -11,11 +11,33 @@ import {
   RankingValidationError
 } from '../../services/ranking.js';
 import { logger as defaultLogger, logAgentHop } from '../../utils/logger.js';
+import { setSessionProgress } from '../../services/sessionProgress.js';
+import { formatSearchContextDetail, formatTransportLabel } from '../../services/progressFormat.js';
+import { enrichCandidatesWithReviews, enrichTopCandidatesWithReviewsFast } from '../../services/candidateEnrichment.js';
+import {
+  applyLLMScoresToCandidates,
+  scoreCandidatesWithLLM
+} from '../../services/llmReviewScoring.js';
+import {
+  buildSearchKeywords,
+  buildSearchKeywordsFromScores,
+  deriveFoodPreferenceScores
+} from '../../utils/foodPreference.js';
+import { resolveTotalTimeMinutesHeuristic } from '../../services/slotExceptionResolver.js';
+import {
+  FAST_MODE,
+  BET_ROUTE_CANDIDATE_LIMIT_FAST,
+  BET_ROUTE_CONCURRENCY_FAST,
+  BET_REVIEW_ENRICH_LIMIT_FAST,
+  BET_REVIEW_TIMEOUT_MS_FAST
+} from '../../config/performance.js';
 
 export const DEFAULT_TOP_N = 5;
 export const DEFAULT_NEARBY_CANDIDATE_WINDOW = 20;
 export const DEFAULT_ROUTE_CONCURRENCY = 4;
 export const DEFAULT_ROUTE_CANDIDATE_LIMIT = 15;
+export const DEFAULT_REVIEW_CONCURRENCY = 6;
+export const DEFAULT_LLM_SCORE_CONCURRENCY = 1;
 
 const defaultDependencies = {
   searchNearbyCandidates: defaultSearchNearbyCandidates,
@@ -23,6 +45,9 @@ const defaultDependencies = {
   getDrivingRoute: defaultGetDrivingRoute,
   mergeCandidateWithRoute: defaultMergeCandidateWithRoute,
   rankCandidates: defaultRankCandidates,
+  enrichCandidatesWithReviews,
+  enrichTopCandidatesWithReviewsFast,
+  scoreCandidatesWithLLM,
   logger: defaultLogger
 };
 
@@ -53,29 +78,9 @@ export function getSearchRadius(mode, transportMode) {
   return transportMode === 'walk' ? 2000 : 10000;
 }
 
-export async function mapWithConcurrencyLimit(items, limit, mapper) {
-  if (items.length === 0) {
-    return [];
-  }
+import { mapWithConcurrencyLimit } from '../../utils/concurrency.js';
 
-  const normalizedLimit = Math.min(
-    items.length,
-    normalizePositiveInteger(limit, DEFAULT_ROUTE_CONCURRENCY)
-  );
-  const results = new Array(items.length);
-  let cursor = 0;
-
-  const workers = Array.from({ length: normalizedLimit }, async () => {
-    while (cursor < items.length) {
-      const currentIndex = cursor;
-      cursor += 1;
-      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
-}
+export { mapWithConcurrencyLimit };
 
 export class BetAgent {
   constructor(dependencies = {}) {
@@ -90,9 +95,32 @@ export class BetAgent {
       now = null,
       topN = DEFAULT_TOP_N,
       routeConcurrency = DEFAULT_ROUTE_CONCURRENCY,
-      routeCandidateLimit = DEFAULT_ROUTE_CANDIDATE_LIMIT
+      routeCandidateLimit = DEFAULT_ROUTE_CANDIDATE_LIMIT,
+      sessionId = null,
+      userQuery = '',
+      fastMode = FAST_MODE,
+      excludeCandidateIds = []
     } = options;
-    const { mode, transportMode, location, totalTimeMinutes } = slots;
+    const dislikedProfiles = options.dislikedProfiles || [];
+    const { mode, transportMode, location, desiredFoods = [], searchKeywords = [], venuePreference, foodPreferenceScores = [] } =
+      slots;
+    let { totalTimeMinutes } = slots;
+    const normalizedDesiredFoods = Array.isArray(desiredFoods) ? desiredFoods : [];
+    const resolvedFoodScores = deriveFoodPreferenceScores({
+      desiredFoods: normalizedDesiredFoods,
+      excludedFoods: slots.excludedFoods || [],
+      foodPreferenceScores
+    });
+    const normalizedSearchKeywords =
+      resolvedFoodScores.length > 0
+        ? buildSearchKeywordsFromScores(
+            resolvedFoodScores,
+            Array.isArray(searchKeywords) ? searchKeywords : []
+          )
+        : buildSearchKeywords(
+            normalizedDesiredFoods,
+            Array.isArray(searchKeywords) ? searchKeywords : []
+          );
     const searchRadius = getSearchRadius(mode, transportMode);
     const normalizedTopN = normalizePositiveInteger(topN, DEFAULT_TOP_N);
     const normalizedRouteConcurrency = normalizePositiveInteger(
@@ -103,9 +131,19 @@ export class BetAgent {
       routeCandidateLimit,
       DEFAULT_ROUTE_CANDIDATE_LIMIT
     );
+    const baseRouteLimit =
+      normalizedDesiredFoods.length > 0
+        ? Math.max(normalizedRouteCandidateLimit, 20)
+        : normalizedRouteCandidateLimit;
+    const effectiveRouteLimit = fastMode
+      ? Math.min(baseRouteLimit, BET_ROUTE_CANDIDATE_LIMIT_FAST)
+      : baseRouteLimit;
+    const activeRouteConcurrency = fastMode
+      ? BET_ROUTE_CONCURRENCY_FAST
+      : normalizedRouteConcurrency;
     const candidateWindowLimit = Math.min(
-      DEFAULT_NEARBY_CANDIDATE_WINDOW,
-      normalizedRouteCandidateLimit
+      normalizedDesiredFoods.length > 0 ? 25 : DEFAULT_NEARBY_CANDIDATE_WINDOW,
+      effectiveRouteLimit
     );
     const metadata = {
       searchRadiusMeters: searchRadius,
@@ -121,11 +159,18 @@ export class BetAgent {
     try {
       validateTimeBudget(totalTimeMinutes);
     } catch (error) {
-      return createErrorResult(
-        error.code || ErrorCodes.INVALID_TOTAL_TIME,
-        error.message,
-        metadata
-      );
+      const resolved = resolveTotalTimeMinutesHeuristic(totalTimeMinutes, userQuery);
+      totalTimeMinutes = resolved.value;
+      slots.totalTimeMinutes = totalTimeMinutes;
+      try {
+        validateTimeBudget(totalTimeMinutes);
+      } catch {
+        return createErrorResult(
+          error.code || ErrorCodes.INVALID_TOTAL_TIME,
+          error.message,
+          metadata
+        );
+      }
     }
 
     this.dependencies.logger.info('Bet search started', {
@@ -138,12 +183,34 @@ export class BetAgent {
       routeConcurrency: normalizedRouteConcurrency
     });
 
+    if (sessionId) {
+      setSessionProgress(sessionId, {
+        phase: 'bet_search',
+        message: '네이버에서 근처 식당 검색 중',
+        detail: formatSearchContextDetail({
+          desiredFoods: normalizedDesiredFoods,
+          searchKeywords: normalizedSearchKeywords,
+          transportMode,
+          searchRadiusMeters: searchRadius
+        }),
+        meta: {
+          후보창: `${candidateWindowLimit}곳`,
+          모드: mode === 'travel' ? '출장/여행' : '현재 위치'
+        }
+      });
+    }
+
     let nearbyCandidates;
     try {
       nearbyCandidates = await this.dependencies.searchNearbyCandidates(
         location.lat,
         location.lng,
-        searchRadius
+        searchRadius,
+        {
+          desiredFoods: normalizedDesiredFoods,
+          searchKeywords: normalizedSearchKeywords,
+          venuePreference: venuePreference || 'restaurant'
+        }
       );
     } catch (error) {
       this.dependencies.logger.error(
@@ -191,6 +258,19 @@ export class BetAgent {
       );
     }
 
+    if (sessionId) {
+      setSessionProgress(sessionId, {
+        phase: 'bet_search_done',
+        message: `식당 ${normalizedCandidates.length}곳 발견`,
+        detail: `경로 계산 대상 ${candidatesForRouting.length}곳 · 검색 ${normalizedSearchKeywords.slice(0, 5).join(', ') || '주변 식당'}`
+      });
+      setSessionProgress(sessionId, {
+        phase: 'bet_routes',
+        message: '이동 경로 계산 중',
+        detail: `${candidatesForRouting.length}곳 · ${transportMode === 'walk' ? '도보' : '차량'} · 동시 ${activeRouteConcurrency}건`
+      });
+    }
+
     const getRoute =
       transportMode === 'walk'
         ? this.dependencies.getWalkingRoute
@@ -201,7 +281,7 @@ export class BetAgent {
 
     const routeResults = await mapWithConcurrencyLimit(
       candidatesForRouting,
-      normalizedRouteConcurrency,
+      activeRouteConcurrency,
       async (candidate) => {
         logAgentHop(this.dependencies.logger, {
           fromAgent: 'bet',
@@ -266,13 +346,133 @@ export class BetAgent {
       );
     }
 
+    if (sessionId) {
+      setSessionProgress(sessionId, {
+        phase: 'bet_routes_done',
+        message: '이동 경로 계산 완료',
+        detail: `${routedCandidates.length}곳 성공${routeFailureCount > 0 ? ` · ${routeFailureCount}곳 실패` : ''}`,
+        meta: {
+          총소요: `${totalTimeMinutes}분 예산`
+        }
+      });
+    }
+
+    let reviewedCandidates = routedCandidates;
+
+    if (fastMode) {
+      const quickRanked = this.dependencies.rankCandidates(
+        routedCandidates,
+        { ...slots, totalTimeMinutes },
+        now,
+        Math.max(normalizedTopN, BET_REVIEW_ENRICH_LIMIT_FAST),
+        { dislikedProfiles }
+      );
+      const enrichTargets =
+        quickRanked.length > 0
+          ? quickRanked
+          : routedCandidates.slice(0, BET_REVIEW_ENRICH_LIMIT_FAST);
+
+      if (sessionId) {
+        setSessionProgress(sessionId, {
+          phase: 'bet_reviews',
+          message: '상위 후보만 빠르게 분석 중',
+          detail: `${enrichTargets.length}곳 · 리뷰·평점 추출`,
+          meta: {
+            방식: '빠른 모드'
+          }
+        });
+      }
+
+      const enrichedTargets =
+        await this.dependencies.enrichTopCandidatesWithReviewsFast(
+          enrichTargets,
+          {
+            limit: enrichTargets.length,
+            timeoutMs: BET_REVIEW_TIMEOUT_MS_FAST
+          }
+        );
+      const enrichedIds = new Set(enrichedTargets.map((candidate) => candidate.id));
+      reviewedCandidates = [
+        ...enrichedTargets,
+        ...routedCandidates.filter((candidate) => !enrichedIds.has(candidate.id))
+      ];
+    } else {
+      if (sessionId) {
+        setSessionProgress(sessionId, {
+          phase: 'bet_reviews',
+          message: '리뷰 수집·분석 중',
+          detail: `${routedCandidates.length}곳 · 네이버 리뷰 수집`
+        });
+      }
+
+      reviewedCandidates = await this.dependencies.enrichCandidatesWithReviews(
+        routedCandidates,
+        {
+          concurrency: DEFAULT_REVIEW_CONCURRENCY
+        }
+      );
+
+      if (sessionId) {
+        setSessionProgress(sessionId, {
+          phase: 'bet_reviews_done',
+          message: '리뷰 분석 완료',
+          detail: `${reviewedCandidates.filter((candidate) => (candidate.reviews || []).length > 0).length}곳 리뷰 확보 · 평균 ${Math.round(
+            reviewedCandidates.reduce((sum, candidate) => sum + (candidate.reviews?.length || 0), 0) /
+              Math.max(reviewedCandidates.length, 1)
+          )}건/곳`
+        });
+        setSessionProgress(sessionId, {
+          phase: 'bet_llm_score',
+          message: 'AI가 취향·리뷰 적합도 분석 중',
+          detail: `${reviewedCandidates.length}곳 · 음식 취향·리뷰 키워드 매칭`
+        });
+      }
+
+      const llmScoreMap = await this.dependencies.scoreCandidatesWithLLM(
+        reviewedCandidates,
+        {
+          userQuery,
+          desiredFoods: normalizedDesiredFoods,
+          foodPreferenceScores: resolvedFoodScores,
+          partyContext: slots.partyContext,
+          vibe: slots.vibe,
+          budgetPerPersonKrw: slots.budgetPerPersonKrw,
+          totalTimeMinutes,
+          transportMode: slots.transportMode
+        }
+      );
+      reviewedCandidates = applyLLMScoresToCandidates(
+        reviewedCandidates,
+        llmScoreMap
+      );
+    }
+
+    if (sessionId && fastMode) {
+      setSessionProgress(sessionId, {
+        phase: 'bet_reviews_done',
+        message: '빠른 분석 완료',
+        detail: `${reviewedCandidates.filter((candidate) => (candidate.reviews || []).length > 0).length}곳 리뷰 확보`
+      });
+    }
+
+    const scoredCandidates = reviewedCandidates;
+
+    if (sessionId) {
+      setSessionProgress(sessionId, {
+        phase: 'bet_rank',
+        message: '조건 기반 순위 산정 중',
+        detail: `총 소요 ${totalTimeMinutes}분 · 이동 ${formatTransportLabel(transportMode) || transportMode} · 예산·분위기·음식 가중치 반영`
+      });
+    }
+
     let rankedCandidates;
     try {
       rankedCandidates = this.dependencies.rankCandidates(
-        routedCandidates,
-        slots,
+        scoredCandidates,
+        { ...slots, totalTimeMinutes },
         now,
-        normalizedTopN
+        normalizedTopN,
+        { dislikedProfiles }
       );
     } catch (error) {
       if (
@@ -297,12 +497,43 @@ export class BetAgent {
       );
     }
 
+    const excludedIds = new Set(
+      Array.isArray(excludeCandidateIds) ? excludeCandidateIds : []
+    );
+    if (excludedIds.size > 0) {
+      rankedCandidates = rankedCandidates.filter(
+        (candidate) => !excludedIds.has(candidate.id)
+      );
+    }
+
+    if (rankedCandidates.length === 0) {
+      return createErrorResult(
+        ErrorCodes.NO_RESULTS,
+        '싫어요한 식당을 제외하면 추천할 곳이 없습니다.',
+        routeMetadata
+      );
+    }
+
     this.dependencies.logger.info('Bet ranking completed', {
       event: 'bet_ranking_completed',
       agent: 'bet',
       ...routeMetadata,
       eligibleCount: rankedCandidates.length
     });
+
+    if (sessionId) {
+      setSessionProgress(sessionId, {
+        phase: 'bet_rank_done',
+        message: '식당 선별 완료',
+        detail: `${rankedCandidates.length}곳 추천 후보`,
+        meta: {
+          상위: rankedCandidates
+            .slice(0, 3)
+            .map((candidate) => candidate.name)
+            .join(', ')
+        }
+      });
+    }
 
     return {
       status: 'results',

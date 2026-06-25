@@ -30,19 +30,19 @@ describe('LLM Config Loader', () => {
   });
 
   it('provides default values for optional environment variables', () => {
-    vi.stubEnv('LLM_API_KEY', 'test-key');
-    vi.stubEnv('LLM_MODEL_ORCHESTRATOR', 'model-orch');
-    vi.stubEnv('LLM_MODEL_ALEPH', 'model-al');
-    vi.stubEnv('LLM_MODEL_GIMEL', 'model-gim');
+    vi.stubEnv('OPENROUTER_API_KEY', 'openrouter-key');
+    vi.stubEnv('LLM_MODEL_ORCHESTRATOR', '');
+    vi.stubEnv('LLM_MODEL_ALEPH', '');
+    vi.stubEnv('LLM_MODEL_GIMEL', '');
+    vi.stubEnv('LLM_MODEL_BET', '');
 
     vi.stubEnv('LLM_BASE_URL', '');
     vi.stubEnv('LLM_TIMEOUT_MS', '');
-    vi.stubEnv('LLM_MODEL_BET', '');
 
     const config = loadLLMConfig();
-    expect(config.baseURL).toBeFalsy();
+    expect(config.baseURL).toBe('https://openrouter.ai/api/v1');
     expect(config.timeoutMs).toBe(30000);
-    expect(config.models.bet).toBeFalsy();
+    expect(config.models.bet).toBe('google/gemini-2.5-flash');
   });
 
   it('uses one OpenRouter key and model for every agent by default', () => {
@@ -61,9 +61,9 @@ describe('LLM Config Loader', () => {
     expect(config.baseURL).toBe('https://openrouter.ai/api/v1');
     expect(config.reasoning).toEqual({ enabled: true });
     expect(config.models).toEqual({
-      orchestrator: 'anthropic/claude-sonnet-4.6',
+      orchestrator: 'google/gemini-2.5-flash-lite',
       aleph: 'anthropic/claude-sonnet-4.6',
-      bet: 'anthropic/claude-sonnet-4.6',
+      bet: 'google/gemini-2.5-flash',
       gimel: 'anthropic/claude-sonnet-4.6'
     });
   });
@@ -95,6 +95,7 @@ describe('LLM Config Loader', () => {
     vi.stubEnv('LLM_MODEL_ORCHESTRATOR', 'model-orch');
     vi.stubEnv('LLM_MODEL_ALEPH', 'model-al');
     vi.stubEnv('LLM_MODEL_GIMEL', 'model-gim');
+    vi.stubEnv('LLM_MODEL_BET', 'model-bet');
 
     expect(() => loadLLMConfig()).toThrow(
       /Missing required LLM config: LLM_API_KEY/
@@ -117,6 +118,7 @@ describe('LLM Config Loader', () => {
     vi.stubEnv('LLM_MODEL_ORCHESTRATOR', 'model-orch');
     vi.stubEnv('LLM_MODEL_ALEPH', 'model-al');
     vi.stubEnv('LLM_MODEL_GIMEL', 'model-gim');
+    vi.stubEnv('LLM_MODEL_BET', 'model-bet');
 
     expect(() => loadLLMConfig()).toThrow(
       /Missing required LLM config: LLM_API_KEY/

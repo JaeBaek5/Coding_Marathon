@@ -15,9 +15,14 @@ class SessionStore {
       feedbackLikeCount: 0,
       likedCandidateIds: [],
       dislikedCandidateIds: [],
+      dislikedCandidateProfiles: [],
       currentRecommendationIndex: 0,
       candidates: [],
       candidatePool: [],
+      pendingRefinement: false,
+      userQuery: '',
+      progress: null,
+      progressLog: [],
       createdAt: now,
       updatedAt: now
     };
@@ -70,6 +75,12 @@ class SessionStore {
     }
     if (updates.dislikedCandidateIds !== undefined) {
       session.dislikedCandidateIds = updates.dislikedCandidateIds;
+    }
+    if (updates.dislikedCandidateProfiles !== undefined) {
+      session.dislikedCandidateProfiles = updates.dislikedCandidateProfiles;
+    }
+    if (updates.pendingRefinement !== undefined) {
+      session.pendingRefinement = updates.pendingRefinement;
     }
 
     session.updatedAt = Date.now();

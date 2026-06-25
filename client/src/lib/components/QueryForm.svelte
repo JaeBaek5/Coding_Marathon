@@ -3,10 +3,21 @@
 
   let localSearchQuery = $state('');
 
+  const normalLocationSearchEnabled = $derived(
+    session.locationStatus !== 'ready'
+  );
+
+  const travelLocationSearchEnabled = $derived(!session.selectedLocation);
+
   function handleModeChange(newMode) {
     session.mode = newMode;
     if (newMode === 'normal') {
       session.selectedLocation = null;
+      localSearchQuery = '';
+      session.restartLocationAcquisition();
+    } else {
+      session.clearUserLocation();
+      localSearchQuery = '';
     }
   }
 
@@ -17,11 +28,27 @@
   }
 
   function selectLocation(loc) {
-    session.selectedLocation = loc;
+    if (session.mode === 'travel') {
+      session.selectedLocation = loc;
+    } else {
+      session.applyManualLocation(loc);
+    }
     localSearchQuery = loc.name;
     session.searchQuery = loc.name;
     session.searchLocation('');
   }
+
+  $effect(() => {
+    if (session.mode === 'normal' && session.locationStatus === 'ready') {
+      session.searchLocation('');
+    }
+  });
+
+  $effect(() => {
+    if (session.mode === 'travel' && session.selectedLocation) {
+      session.searchLocation('');
+    }
+  });
 </script>
 
 <div class="query-form-container card-bone">
@@ -42,8 +69,47 @@
     </button>
   </div>
 
+  {#if session.mode === 'normal'}
+    <div class="location-status" data-testid="location-status">
+      <p
+        class="location-status-text"
+        class:location-status-text--active={session.locationStatus === 'acquiring'}
+        class:location-status-text--failed={session.locationStatus === 'failed'}
+      >
+        {session.locationMessage || '위치를 확인하는 중...'}
+      </p>
+    </div>
+
+    <div class="travel-location-search" class:search-disabled={!normalLocationSearchEnabled}>
+      <label for="normal-location-search-input" class="search-label">위치 검색</label>
+      <input
+        id="normal-location-search-input"
+        type="text"
+        class="text-input search-input"
+        placeholder="어디 근처 맛집을 찾을까요? (예: 순천역, 강남역)"
+        value={localSearchQuery}
+        oninput={handleSearchInput}
+        disabled={!normalLocationSearchEnabled}
+      />
+      {#if normalLocationSearchEnabled && session.locationResults && session.locationResults.length > 0}
+        <div class="search-results">
+          {#each session.locationResults as loc}
+            <button
+              type="button"
+              class="search-result-item"
+              onclick={() => selectLocation(loc)}
+            >
+              <div class="result-name">{loc.name}</div>
+              <div class="result-address">{loc.address}</div>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   {#if session.mode === 'travel'}
-    <div class="travel-location-search">
+    <div class="travel-location-search" class:search-disabled={!travelLocationSearchEnabled}>
       <label for="location-search-input" class="search-label">목적지 검색</label>
       <input
         id="location-search-input"
@@ -52,8 +118,9 @@
         placeholder="어디로 가시나요? (예: 판교역)"
         value={localSearchQuery}
         oninput={handleSearchInput}
+        disabled={!travelLocationSearchEnabled}
       />
-      {#if session.locationResults && session.locationResults.length > 0}
+      {#if travelLocationSearchEnabled && session.locationResults && session.locationResults.length > 0}
         <div class="search-results">
           {#each session.locationResults as loc}
             <button
@@ -76,11 +143,11 @@
   {/if}
 
   <div class="query-input-group">
-    <label for="query-text-area" class="query-label">원하는 식사 조건을 입력하세요</label>
+    <label for="query-text-area" class="query-label">지금 어떤 상태인지 알려주세요</label>
     <textarea
       id="query-text-area"
       class="textarea-input"
-      placeholder="예: 회사 상사랑 점심, 식대 1만원, 1시간 이내, 도보 가능"
+      placeholder="예: 어제 술 마셔서 피곤해, 스트레스 받았어, 배는 고픈데 뭘 먹을지 모르겠어"
       bind:value={session.query}
       disabled={session.loading}
     ></textarea>
@@ -89,12 +156,12 @@
   <button
     class="button-primary submit-btn"
     onclick={() => session.submitQuery()}
-    disabled={session.loading || !session.query.trim() || (session.mode === 'travel' && !session.selectedLocation)}
+    disabled={session.loading || !session.query.trim() || (session.mode === 'travel' && !session.selectedLocation) || (session.mode === 'normal' && session.locationStatus !== 'ready')}
   >
     {#if session.loading}
-      추천받는 중...
+      분석 중...
     {:else}
-      식당 추천받기
+      음식 맞추기
     {/if}
   </button>
 </div>
@@ -127,6 +194,16 @@
 
   .search-input {
     width: 100%;
+  }
+
+  .search-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    background-color: var(--color-surface-bone);
+  }
+
+  .search-disabled .search-label {
+    color: var(--color-ash);
   }
 
   .search-results {
@@ -178,6 +255,27 @@
     align-self: flex-start;
     font-size: 13px;
     padding: 6px 12px;
+  }
+
+  .location-status {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .location-status-text {
+    font-size: 13px;
+    color: var(--color-body);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .location-status-text--active {
+    color: var(--color-charcoal);
+  }
+
+  .location-status-text--failed {
+    color: var(--color-primary);
   }
 
   .query-input-group {
