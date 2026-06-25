@@ -207,7 +207,7 @@ Rules:
 
 - All agent modules receive the same client/config boundary.
 - `LLM_BASE_URL` must be swappable without code changes.
-- OpenRouter default model is `cohere/north-mini-code:free` unless overridden.
+- OpenRouter default model is `anthropic/claude-sonnet-4.6` unless overridden.
 - All model responses must be schema-validated.
 - Tests mock the shared client boundary, not raw provider HTTP.
 
@@ -424,6 +424,19 @@ API/client contract impact:
 - Playwright covers mobile and desktop UX flows, including granted, denied, manual location paths, one-at-a-time recommendations, feedback buttons, and the full-pool reveal after repeated dislikes.
 - Live smoke tests run only when valid env values are present.
 - Evidence path convention: `.omo/evidence/task-{N}-{slug}.{ext}`
+
+## TODOs
+
+- [x] Task 1: Bootstrap shared LLM runtime and env contract
+- [x] Task 2: Define swarm contracts, fixtures, and prompt/output schemas
+- [ ] Task 3: Implement Aleph slot parsing and follow-up validation
+- [ ] Task 4: Implement provider adapter boundaries and normalization for Bet
+- [ ] Task 5: Implement Bet deterministic search, route, filter, and ranking pipeline
+- [ ] Task 6: Implement Gimel grounded reason generation and review extraction
+- [ ] Task 7: Implement Orchestrator supervisor flow and backend HTTP wiring
+- [ ] Task 8: Implement frontend natural-language request and follow-up form flow
+- [ ] Task 9: Implement results UI, grounded reasons, and map metadata rendering
+- [ ] Task 10: Harden smoke coverage, observability, and compatibility checks
 
 ## Execution Waves
 

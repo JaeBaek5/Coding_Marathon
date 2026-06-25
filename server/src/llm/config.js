@@ -1,25 +1,48 @@
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-export const OPENROUTER_DEFAULT_MODEL = 'cohere/north-mini-code:free';
+export const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
+
+function envValue(env, name) {
+  const value = env[name];
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseTimeoutMs(value) {
+  if (!value) {
+    return 30000;
+  }
+
+  const timeoutMs = Number(value);
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(
+      'Invalid LLM config: LLM_TIMEOUT_MS must be a positive integer'
+    );
+  }
+
+  return timeoutMs;
+}
 
 export function loadLLMConfig() {
-  const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+  const openRouterApiKey = envValue(process.env, 'OPENROUTER_API_KEY');
   const provider = openRouterApiKey ? 'openrouter' : 'openai-compatible';
-  const apiKey = openRouterApiKey || process.env.LLM_API_KEY;
+  const apiKey = openRouterApiKey || envValue(process.env, 'LLM_API_KEY');
   const baseURL =
-    process.env.LLM_BASE_URL ||
+    envValue(process.env, 'LLM_BASE_URL') ||
     (openRouterApiKey ? OPENROUTER_BASE_URL : undefined);
   const sharedModel =
-    process.env.OPENROUTER_MODEL ||
-    process.env.LLM_MODEL ||
+    envValue(process.env, 'OPENROUTER_MODEL') ||
+    envValue(process.env, 'LLM_MODEL') ||
     (openRouterApiKey ? OPENROUTER_DEFAULT_MODEL : null);
-  const orchestrator = process.env.LLM_MODEL_ORCHESTRATOR || sharedModel;
-  const aleph = process.env.LLM_MODEL_ALEPH || sharedModel;
-  const gimel = process.env.LLM_MODEL_GIMEL || sharedModel;
-  const bet = process.env.LLM_MODEL_BET || sharedModel;
-
-  const timeoutMs = process.env.LLM_TIMEOUT_MS
-    ? parseInt(process.env.LLM_TIMEOUT_MS, 10)
-    : 30000;
+  const orchestrator =
+    envValue(process.env, 'LLM_MODEL_ORCHESTRATOR') || sharedModel;
+  const aleph = envValue(process.env, 'LLM_MODEL_ALEPH') || sharedModel;
+  const gimel = envValue(process.env, 'LLM_MODEL_GIMEL') || sharedModel;
+  const bet = envValue(process.env, 'LLM_MODEL_BET') || sharedModel;
+  const timeoutMs = parseTimeoutMs(envValue(process.env, 'LLM_TIMEOUT_MS'));
 
   if (!apiKey) {
     throw new Error(

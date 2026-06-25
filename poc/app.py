@@ -31,7 +31,7 @@ NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "").strip()
 NAVER_SEARCH_ID = os.getenv("NAVER_SEARCH_ID", "").strip()          # developers.naver.com: 지역검색
 NAVER_SEARCH_SECRET = os.getenv("NAVER_SEARCH_SECRET", "").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "cohere/north-mini-code:free").strip()
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6").strip()
 OPENROUTER_VISION_MODEL = (os.getenv("OPENROUTER_VISION_MODEL") or os.getenv("MODEL") or "anthropic/claude-sonnet-4.5").strip()
 
 HTTP_TIMEOUT = 15

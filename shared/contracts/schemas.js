@@ -46,6 +46,40 @@ export const CoordinateSchema = z.object({
   lng: z.number({ required_error: 'Longitude is required' })
 });
 
+export const LocationPayloadSchema = CoordinateSchema.extend({
+  accuracyMeters: z.number().nonnegative().nullable().optional(),
+  source: z.enum([
+    'browser-geolocation',
+    'manual-location',
+    'selected-location'
+  ])
+}).strict();
+
+export const CanonicalExpectedSlotBundleSchema = z
+  .object({
+    mode: z.enum([Mode.NORMAL, Mode.TRAVEL]),
+    mealPeriod: z.enum([
+      MealPeriod.BREAKFAST,
+      MealPeriod.LUNCH,
+      MealPeriod.DINNER,
+      MealPeriod.LATE_NIGHT
+    ]),
+    totalTimeMinutes: z.number().int().min(20).max(60),
+    transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
+    budgetPerPersonKrw: z.number().int().nonnegative(),
+    partyContext: z.string(),
+    vibe: z.string(),
+    excludedFoods: z.array(z.string())
+  })
+  .strict();
+
+export const CanonicalCollegeStudentPromptFixtureSchema = z
+  .object({
+    prompt: z.string().min(1),
+    expectedSlotBundle: CanonicalExpectedSlotBundleSchema
+  })
+  .strict();
+
 export const SlotSchema = z.object({
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]),
   mealPeriod: z.enum([
@@ -115,6 +149,50 @@ export const NormalizedCandidateSchema = z.object({
   path: z.array(CoordinateSchema).optional()
 });
 
+export const OrchestratorDecisionOutputSchema = z
+  .object({
+    nextAgent: z.enum(['aleph', 'bet', 'gimel', 'orchestrator']),
+    phase: z.enum([
+      'slot_parsing',
+      'missing_slot_questions',
+      'candidate_search',
+      'reason_generation',
+      'final_response'
+    ]),
+    rationale: z.string().min(1)
+  })
+  .strict();
+
+export const BetCandidateSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string(),
+    address: z.string(),
+    location: CoordinateSchema,
+    placeUrl: z.string().url().nullable().optional(),
+    transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
+    oneWayRouteMinutes: z.number().int().nonnegative(),
+    totalExpectedMinutes: z.number().int().nonnegative(),
+    distanceMeters: z.number().int().nonnegative(),
+    confidenceBadge: z.enum(['high', 'medium', 'low']),
+    providerAttribution: z.string(),
+    openStatus: z.boolean().nullable().default(null),
+    scoreBreakdown: z
+      .object({
+        total: z.number(),
+        components: z.record(z.string(), z.number())
+      })
+      .strict()
+  })
+  .strict();
+
+export const BetSearchOutputSchema = z
+  .object({
+    candidatePool: z.array(BetCandidateSchema).max(5)
+  })
+  .strict();
+
 export const QuestionsResponseSchema = z.object({
   status: z.literal('questions'),
   sessionId: z.string(),
@@ -131,7 +209,9 @@ export const ResultsResponseSchema = z.object({
   status: z.literal('results'),
   sessionId: z.string(),
   eligibleCount: z.number().int().nonnegative(),
-  results: z.array(NormalizedCandidateSchema)
+  results: z.array(NormalizedCandidateSchema),
+  currentRecommendation: NormalizedCandidateSchema.optional(),
+  candidatePool: z.array(NormalizedCandidateSchema).max(5).optional()
 });
 
 export const ErrorResponseSchema = z.object({
@@ -186,19 +266,21 @@ export const AlephMissingSlotOutputSchema = z.object({
   )
 });
 
-export const GimelInputAllowlistSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  category: z.string(),
-  address: z.string(),
-  transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
-  oneWayRouteMinutes: z.number().int().nonnegative(),
-  totalExpectedMinutes: z.number().int().nonnegative(),
-  distanceMeters: z.number().int().nonnegative(),
-  openStatus: z.boolean().nullable().default(null),
-  confidenceBadge: z.enum(['high', 'medium', 'low']),
-  providerAttribution: z.string()
-});
+export const GimelInputAllowlistSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string(),
+    address: z.string(),
+    transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
+    oneWayRouteMinutes: z.number().int().nonnegative(),
+    totalExpectedMinutes: z.number().int().nonnegative(),
+    distanceMeters: z.number().int().nonnegative(),
+    openStatus: z.boolean().nullable().default(null),
+    confidenceBadge: z.enum(['high', 'medium', 'low']),
+    providerAttribution: z.string()
+  })
+  .strict();
 
 export const GimelReasonOutputSchema = z.object({
   reasons: z.array(
@@ -208,6 +290,36 @@ export const GimelReasonOutputSchema = z.object({
     })
   )
 });
+
+export const ReviewExtractionOutputSchema = z
+  .object({
+    provider: z.enum(['naver', 'kakao']).nullable(),
+    placeUrl: z.string().url().nullable(),
+    placeId: z.string().nullable(),
+    rating: z.number().min(0).max(5).nullable(),
+    reviewCount: z.number().int().nonnegative().nullable(),
+    reviews: z.array(
+      z
+        .object({
+          body: z.string().min(1),
+          author: z.string().nullable().optional(),
+          rating: z.number().min(0).max(5).nullable().optional(),
+          visitedAt: z.string().nullable().optional()
+        })
+        .strict()
+    ),
+    reviewSummary: z
+      .object({
+        pros: z.string().nullable(),
+        cons: z.string().nullable()
+      })
+      .strict(),
+    reviewSnippets: z.array(z.string()),
+    extractionMethod: z.enum(['browser', 'static-hydration', 'unavailable']),
+    fetchedAt: z.string().datetime({ offset: true }),
+    error: z.string().nullable()
+  })
+  .strict();
 
 export const RecommendationResponseSchema = z.discriminatedUnion('status', [
   QuestionsResponseSchema,

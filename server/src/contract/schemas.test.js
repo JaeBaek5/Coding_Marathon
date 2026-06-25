@@ -10,9 +10,14 @@ import {
   ErrorResponseSchema,
   AlephParseOutputSchema,
   AlephMissingSlotOutputSchema,
+  BetSearchOutputSchema,
+  CanonicalCollegeStudentPromptFixtureSchema,
   GimelInputAllowlistSchema,
   GimelReasonOutputSchema,
-  NormalizedCandidateSchema
+  LocationPayloadSchema,
+  NormalizedCandidateSchema,
+  OrchestratorDecisionOutputSchema,
+  ReviewExtractionOutputSchema
 } from '../../../shared/contracts/schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -202,6 +207,30 @@ describe('Domain Contracts & Schemas Validation', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should validate structured location payloads with source metadata', () => {
+    const location = {
+      lat: 37.5665,
+      lng: 126.978,
+      accuracyMeters: 25,
+      source: 'browser-geolocation'
+    };
+
+    const result = LocationPayloadSchema.safeParse(location);
+
+    expect(result.success).toBe(true);
+    expect(result.data.source).toBe('browser-geolocation');
+  });
+
+  it('should reject structured location payloads without a supported source', () => {
+    const result = LocationPayloadSchema.safeParse({
+      lat: 37.5665,
+      lng: 126.978,
+      accuracyMeters: 25
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('should successfully validate Aleph missing-slot output schema', () => {
     const mockOutput = {
       missingFields: ['budgetPerPersonKrw', 'vibe'],
@@ -217,10 +246,65 @@ describe('Domain Contracts & Schemas Validation', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should validate Orchestrator supervisor decision output schema', () => {
+    const result = OrchestratorDecisionOutputSchema.safeParse({
+      nextAgent: 'bet',
+      phase: 'candidate_search',
+      rationale: 'All required slots and structured location are present.'
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('should successfully validate Bet candidate payload schema (NormalizedCandidateSchema)', async () => {
     const fixture = await loadFixture('normal-mode-happy.json');
     const candidate = fixture.results[0];
     const result = NormalizedCandidateSchema.safeParse(candidate);
+    expect(result.success).toBe(true);
+  });
+
+  it('should successfully validate Bet search output schema', () => {
+    const result = BetSearchOutputSchema.safeParse({
+      candidatePool: [
+        {
+          id: 'place_1',
+          name: '든든한국밥',
+          category: '한식',
+          address: '서울특별시 강남구 역삼동 123-45',
+          location: { lat: 37.4981, lng: 127.0282 },
+          placeUrl: 'https://place.map.kakao.com/123',
+          transportMode: 'walk',
+          oneWayRouteMinutes: 5,
+          totalExpectedMinutes: 40,
+          distanceMeters: 400,
+          confidenceBadge: 'high',
+          providerAttribution: 'Kakao Local / Kakao Mobility',
+          openStatus: null,
+          scoreBreakdown: {
+            total: 96,
+            components: {
+              routeTime: 50,
+              budgetFit: 30,
+              distance: 16
+            }
+          }
+        }
+      ]
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate final results response state with sequential recommendation fields', async () => {
+    const fixture = await loadFixture('normal-mode-happy.json');
+    const sequentialResponse = {
+      ...fixture,
+      currentRecommendation: fixture.results[0],
+      candidatePool: fixture.results
+    };
+
+    const result = RecommendationResponseSchema.safeParse(sequentialResponse);
+
     expect(result.success).toBe(true);
   });
 
@@ -243,5 +327,62 @@ describe('Domain Contracts & Schemas Validation', () => {
     };
     const result = GimelReasonOutputSchema.safeParse(mockOutput);
     expect(result.success).toBe(true);
+  });
+
+  it('should reject raw coordinates in the Gimel input allowlist schema', async () => {
+    const fixture = await loadFixture('null-field-grounding.json');
+    const result = GimelInputAllowlistSchema.safeParse({
+      ...fixture,
+      location: { lat: 37.4981, lng: 127.0282 }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('should successfully validate review extraction output schema', () => {
+    const result = ReviewExtractionOutputSchema.safeParse({
+      provider: 'naver',
+      placeUrl:
+        'https://pcmap.place.naver.com/restaurant/1301083778/review/visitor?locale=ko',
+      placeId: '1301083778',
+      rating: 4.4,
+      reviewCount: 22,
+      reviews: [
+        {
+          body: '점심 시간에도 편하게 대화하기 좋은 분위기였어요.',
+          author: 'visitor1',
+          rating: null,
+          visitedAt: null
+        }
+      ],
+      reviewSummary: {
+        pros: '편하게 대화하기 좋은 분위기라는 반응이 있습니다.',
+        cons: null
+      },
+      reviewSnippets: ['점심 시간에도 편하게 대화하기 좋은 분위기였어요.'],
+      extractionMethod: 'static-hydration',
+      fetchedAt: '2026-06-25T14:30:00.000Z',
+      error: null
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should successfully validate canonical college-student prompt fixture', async () => {
+    const fixture = await loadFixture('canonical-college-student-prompt.json');
+    const result =
+      CanonicalCollegeStudentPromptFixtureSchema.safeParse(fixture);
+
+    expect(result.success).toBe(true);
+    expect(result.data.expectedSlotBundle).toEqual({
+      mode: 'normal',
+      mealPeriod: 'lunch',
+      totalTimeMinutes: 60,
+      transportMode: 'walk',
+      budgetPerPersonKrw: 12000,
+      partyContext: '친구',
+      vibe: '캐주얼하고 편하게 대화 가능한 분위기',
+      excludedFoods: ['매운 음식']
+    });
   });
 });

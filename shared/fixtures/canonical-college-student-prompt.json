@@ -1,0 +1,13 @@
+{
+  "prompt": "친구랑 같이 지금 점심 먹으려고 하는 대학생인데, 현재 위치 기준으로 한 시간 이내에 다녀올 수 있는 곳 추천해줘. 도보로 갈 수 있으면 좋겠고, 1인당 예산은 12000원 정도야. 너무 시끄럽지 않고 편하게 오래 얘기할 수 있는 캐주얼한 분위기면 좋겠어. 매운 음식은 빼고 추천해줘.",
+  "expectedSlotBundle": {
+    "mode": "normal",
+    "mealPeriod": "lunch",
+    "totalTimeMinutes": 60,
+    "transportMode": "walk",
+    "budgetPerPersonKrw": 12000,
+    "partyContext": "친구",
+    "vibe": "캐주얼하고 편하게 대화 가능한 분위기",
+    "excludedFoods": ["매운 음식"]
+  }
+}

@@ -99,7 +99,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.text).not.toContain('secret-openrouter-key');
       expect(res.body.llmHarness.provider).toBe('openrouter');
       expect(res.body.llmHarness.baseURL).toBe('https://openrouter.ai/api/v1');
-      expect(res.body.llmHarness.model).toBe('cohere/north-mini-code:free');
+      expect(res.body.llmHarness.model).toBe('anthropic/claude-sonnet-4.6');
       expect(res.body.llmHarness.agents.map((agent) => agent.name)).toEqual([
         'orchestrator',
         'aleph',
@@ -108,7 +108,30 @@ describe('HTTP API Endpoints Integration Tests', () => {
       ]);
       expect(
         res.body.llmHarness.agents.every(
-          (agent) => agent.model === 'cohere/north-mini-code:free'
+          (agent) => agent.model === 'anthropic/claude-sonnet-4.6'
+        )
+      ).toBe(true);
+    });
+
+    it('should expose custom OpenRouter harness metadata without exposing secrets', async () => {
+      vi.stubEnv('OPENROUTER_API_KEY', 'secret-openrouter-key');
+      vi.stubEnv('LLM_BASE_URL', 'https://custom-openrouter.test/v1');
+      vi.stubEnv('OPENROUTER_MODEL', 'custom/openrouter-model');
+      resetClientForTesting();
+
+      const res = await request(app).get('/api/config/public').expect(200);
+
+      expect(res.text).not.toContain('secret-openrouter-key');
+      expect(res.body.llmHarness).toMatchObject({
+        provider: 'openrouter',
+        baseURL: 'https://custom-openrouter.test/v1',
+        model: 'custom/openrouter-model'
+      });
+      expect(
+        res.body.llmHarness.agents.every(
+          (agent) =>
+            agent.baseURL === 'https://custom-openrouter.test/v1' &&
+            agent.model === 'custom/openrouter-model'
         )
       ).toBe(true);
     });

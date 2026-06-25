@@ -61,11 +61,55 @@ describe('LLM Config Loader', () => {
     expect(config.baseURL).toBe('https://openrouter.ai/api/v1');
     expect(config.reasoning).toEqual({ enabled: true });
     expect(config.models).toEqual({
-      orchestrator: 'cohere/north-mini-code:free',
-      aleph: 'cohere/north-mini-code:free',
-      bet: 'cohere/north-mini-code:free',
-      gimel: 'cohere/north-mini-code:free'
+      orchestrator: 'anthropic/claude-sonnet-4.6',
+      aleph: 'anthropic/claude-sonnet-4.6',
+      bet: 'anthropic/claude-sonnet-4.6',
+      gimel: 'anthropic/claude-sonnet-4.6'
     });
+  });
+
+  it('uses OPENROUTER_MODEL as the shared OpenRouter override', () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'openrouter-key');
+    vi.stubEnv('OPENROUTER_MODEL', 'custom/openrouter-model');
+    vi.stubEnv('LLM_API_KEY', '');
+    vi.stubEnv('LLM_BASE_URL', '   ');
+    vi.stubEnv('LLM_MODEL_ORCHESTRATOR', '');
+    vi.stubEnv('LLM_MODEL_ALEPH', '');
+    vi.stubEnv('LLM_MODEL_BET', '');
+    vi.stubEnv('LLM_MODEL_GIMEL', '');
+
+    const config = loadLLMConfig();
+
+    expect(config.baseURL).toBe('https://openrouter.ai/api/v1');
+    expect(config.models).toEqual({
+      orchestrator: 'custom/openrouter-model',
+      aleph: 'custom/openrouter-model',
+      bet: 'custom/openrouter-model',
+      gimel: 'custom/openrouter-model'
+    });
+  });
+
+  it('treats whitespace-only API keys as missing config', () => {
+    vi.stubEnv('OPENROUTER_API_KEY', '   ');
+    vi.stubEnv('LLM_API_KEY', '   ');
+    vi.stubEnv('LLM_MODEL_ORCHESTRATOR', 'model-orch');
+    vi.stubEnv('LLM_MODEL_ALEPH', 'model-al');
+    vi.stubEnv('LLM_MODEL_GIMEL', 'model-gim');
+
+    expect(() => loadLLMConfig()).toThrow(
+      /Missing required LLM config: LLM_API_KEY/
+    );
+  });
+
+  it('throws a clear error for an invalid timeout value', () => {
+    vi.stubEnv('LLM_API_KEY', 'test-key');
+    vi.stubEnv('LLM_BASE_URL', 'https://custom.api/v1');
+    vi.stubEnv('LLM_MODEL_ORCHESTRATOR', 'model-orch');
+    vi.stubEnv('LLM_MODEL_ALEPH', 'model-al');
+    vi.stubEnv('LLM_MODEL_GIMEL', 'model-gim');
+    vi.stubEnv('LLM_TIMEOUT_MS', 'not-a-number');
+
+    expect(() => loadLLMConfig()).toThrow(/Invalid LLM config: LLM_TIMEOUT_MS/);
   });
 
   it('throws an error if required config is missing', () => {
