@@ -1,27 +1,29 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
 import {
   GimelInputAllowlistSchema,
-  GimelReasonOutputSchema
+  GimelReasonOutputSchema,
+  ReviewExtractionOutputSchema
 } from '../../../../shared/contracts/schemas.js';
 import {
   createAgentChatCompletion,
   getAgentHarness
 } from '../../llm/client.js';
 import { logger, logAgentHop } from '../../utils/logger.js';
+import { extractNaverReviews } from '../../tools/naverReviewExtractor.js';
 
 const SCRAPE_REVIEWS_TOOL = {
   type: 'function',
   function: {
     name: 'scrape_reviews',
     description:
-      'Fetch and scrape real review snippets and ratings from a Kakao or Naver place page URL.',
+      'Fetch and scrape real review snippets and ratings from a Naver place page URL.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         placeUrl: {
           type: 'string',
-          description: 'Kakao Map or Naver Map place URL to inspect.'
+          description: 'Naver Map place URL to inspect.'
         },
         placeName: {
           type: 'string',
@@ -34,124 +36,35 @@ const SCRAPE_REVIEWS_TOOL = {
 };
 
 function createToolError(message) {
-  return {
-    placeUrl: null,
+  return ReviewExtractionOutputSchema.parse({
     provider: null,
+    placeUrl: null,
+    placeId: null,
     rating: null,
     reviewCount: null,
+    reviews: [],
+    reviewSummary: { pros: null, cons: null },
     reviewSnippets: [],
-    sourceExcerpt: null,
+    extractionMethod: 'unavailable',
+    fetchedAt: new Date().toISOString(),
     error: message
-  };
+  });
 }
 
-function stripHtml(value) {
-  return String(value || '')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function getProviderFromUrl(placeUrl) {
-  if (!placeUrl) {
-    return null;
+export async function defaultScrapeReviewsTool({ placeUrl, placeName, address }) {
+  if (!placeUrl && !placeName) {
+    return createToolError('Missing place URL and name');
   }
 
-  const normalized = String(placeUrl).toLowerCase();
-  if (normalized.includes('kakao.com')) {
-    return 'Kakao Map';
+  // Route Naver URLs through the full Apollo extraction pipeline.
+  if (placeUrl && String(placeUrl).toLowerCase().includes('naver.com')) {
+    return extractNaverReviews({ placeUrl, placeName, address });
   }
-
-  if (normalized.includes('naver.com')) {
-    return 'Naver Map';
-  }
-
-  return null;
-}
-
-function parseNumericCapture(text, regex) {
-  const match = text.match(regex);
-  if (!match) {
-    return null;
-  }
-
-  const parsed = Number.parseFloat(match[1].replace(/,/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function collectReviewSnippets(text) {
-  const snippets = [];
-  const quotedMatches = text.matchAll(/["“”'']([^"“”'']{12,140})["“”'']/g);
-
-  for (const match of quotedMatches) {
-    const snippet = stripHtml(match[1]);
-    if (snippet.length >= 12 && snippet.length <= 140) {
-      snippets.push(snippet);
-    }
-    if (snippets.length >= 3) {
-      break;
-    }
-  }
-
-  if (snippets.length > 0) {
-    return snippets;
-  }
-
-  const reviewBlocks = text.matchAll(
-    /(리뷰|후기|평가)[:\s-]+([^.!?\n]{12,140})/gi
-  );
-
-  for (const match of reviewBlocks) {
-    const snippet = stripHtml(match[2]);
-    if (snippet.length >= 12 && snippet.length <= 140) {
-      snippets.push(snippet);
-    }
-    if (snippets.length >= 3) {
-      break;
-    }
-  }
-
-  return snippets;
-}
-
-export async function defaultScrapeReviewsTool({ placeUrl }) {
   if (!placeUrl) {
     return createToolError('Missing place URL');
   }
 
-  const response = await fetch(placeUrl);
-  if (!response.ok) {
-    return createToolError(
-      `Failed to fetch place page: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const html = await response.text();
-  const text = stripHtml(html);
-  const provider = getProviderFromUrl(placeUrl);
-  const rating = parseNumericCapture(
-    text,
-    /(?:평점|rating)\s*[:]?\s*([0-5](?:\.\d)?)/i
-  );
-  const reviewCount = parseNumericCapture(
-    text,
-    /(?:리뷰|후기|평가)\s*(?:수|개수|count)?\s*[:]?\s*([0-9][0-9,]*)/i
-  );
-  const reviewSnippets = collectReviewSnippets(text);
-
-  return {
-    placeUrl,
-    provider,
-    rating,
-    reviewCount: reviewCount === null ? null : Math.round(reviewCount),
-    reviewSnippets,
-    sourceExcerpt: text.slice(0, 500),
-    error: null
-  };
+  return createToolError('Only Naver place URLs are supported');
 }
 
 export function sanitizeCandidateForPrompt(candidate) {
@@ -176,10 +89,15 @@ export function createGroundedFallbackReason(candidate, scraped) {
     `${candidate.category} 식당으로 ${transportLabel} ${candidate.oneWayRouteMinutes}분 거리여서 이동 부담이 적습니다.`
   ];
 
-  if (scraped?.reviewSnippets?.[0]) {
-    parts.push(
-      `실제 리뷰에는 "${scraped.reviewSnippets[0]}"라는 반응이 확인됩니다.`
-    );
+  // Prefer structured reviewSummary.pros over raw first snippet
+  const positiveFact =
+    scraped?.reviewSummary?.pros ?? scraped?.reviewSnippets?.[0] ?? null;
+  if (positiveFact) {
+    parts.push(`실제 리뷰에는 "${positiveFact}"라는 반응이 확인됩니다.`);
+  }
+
+  if (scraped?.reviewSummary?.cons) {
+    parts.push(`단점으로는 "${scraped.reviewSummary.cons}"는 반응도 있습니다.`);
   }
 
   if (typeof scraped?.rating === 'number') {

@@ -1,5 +1,5 @@
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-export const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
+export const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-opus-4.8-fast';
 
 function envValue(env, name) {
   const value = env[name];

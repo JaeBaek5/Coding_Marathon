@@ -3,7 +3,7 @@ import request from 'supertest';
 import app from '../app.js';
 import { sessions } from '../services/sessions.js';
 import { ErrorCodes } from '../../../shared/contracts/schemas.js';
-import { KakaoLocalAdapter } from '../adapters/kakaoLocalAdapter.js';
+import { NaverLocalAdapter } from '../adapters/naverLocalAdapter.js';
 import { cache } from '../utils/cache.js';
 import { resetClientForTesting } from '../llm/client.js';
 
@@ -13,7 +13,8 @@ describe('HTTP API Endpoints Integration Tests', () => {
     cache.clear();
     vi.stubEnv('OPENAI_API_KEY', '');
     vi.stubEnv('GEMINI_API_KEY', '');
-    vi.stubEnv('KAKAO_API_KEY', '');
+    vi.stubEnv('NAVER_SEARCH_ID', '');
+    vi.stubEnv('NAVER_SEARCH_SECRET', '');
     vi.stubEnv('NAVER_CLIENT_ID', '');
     vi.stubEnv('NAVER_CLIENT_SECRET', '');
     resetClientForTesting();
@@ -54,15 +55,16 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.body.mapReady).toBe(false);
       expect(res.body.providerReadiness).toEqual({
         map: false,
-        kakaoLocal: false,
-        kakaoMobility: false,
+        naverLocalSearch: false,
+        naverGeocoding: false,
         naverDirections: false,
         openRouter: false
       });
     });
 
     it('should mark live providers ready when their environment keys are present', async () => {
-      vi.stubEnv('KAKAO_API_KEY', 'secret-kakao-key');
+      vi.stubEnv('NAVER_SEARCH_ID', 'public-naver-search-id');
+      vi.stubEnv('NAVER_SEARCH_SECRET', 'secret-naver-search-secret');
       vi.stubEnv('NAVER_CLIENT_ID', 'public-naver-client-id');
       vi.stubEnv('NAVER_CLIENT_SECRET', 'secret-naver-client-secret');
       vi.stubEnv('OPENROUTER_API_KEY', 'secret-openrouter-key');
@@ -74,12 +76,12 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.body.mapReady).toBe(true);
       expect(res.body.providerReadiness).toEqual({
         map: true,
-        kakaoLocal: true,
-        kakaoMobility: true,
+        naverLocalSearch: true,
+        naverGeocoding: true,
         naverDirections: true,
         openRouter: true
       });
-      expect(res.text).not.toContain('secret-kakao-key');
+      expect(res.text).not.toContain('secret-naver-search-secret');
       expect(res.text).not.toContain('secret-naver-client-secret');
       expect(res.text).not.toContain('secret-openrouter-key');
     });
@@ -99,7 +101,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       expect(res.text).not.toContain('secret-openrouter-key');
       expect(res.body.llmHarness.provider).toBe('openrouter');
       expect(res.body.llmHarness.baseURL).toBe('https://openrouter.ai/api/v1');
-      expect(res.body.llmHarness.model).toBe('anthropic/claude-sonnet-4.6');
+      expect(res.body.llmHarness.model).toBe('anthropic/claude-opus-4.8-fast');
       expect(res.body.llmHarness.agents.map((agent) => agent.name)).toEqual([
         'orchestrator',
         'aleph',
@@ -108,8 +110,8 @@ describe('HTTP API Endpoints Integration Tests', () => {
       ]);
       expect(
         res.body.llmHarness.agents.every(
-          (agent) => agent.model === 'anthropic/claude-sonnet-4.6'
-        )
+        (agent) => agent.model === 'anthropic/claude-opus-4.8-fast'
+      )
       ).toBe(true);
     });
 
@@ -159,8 +161,8 @@ describe('HTTP API Endpoints Integration Tests', () => {
     });
 
     it('should degrade to PROVIDER_ERROR if provider throws and there is no quota match', async () => {
-      vi.spyOn(KakaoLocalAdapter.prototype, 'searchKeyword').mockRejectedValue(
-        new Error('Kakao network issue')
+      vi.spyOn(NaverLocalAdapter.prototype, 'searchKeyword').mockRejectedValue(
+        new Error('Naver network issue')
       );
 
       const res = await request(app)
@@ -172,7 +174,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
     });
 
     it('should map quota error message to PROVIDER_QUOTA code', async () => {
-      vi.spyOn(KakaoLocalAdapter.prototype, 'searchKeyword').mockRejectedValue(
+      vi.spyOn(NaverLocalAdapter.prototype, 'searchKeyword').mockRejectedValue(
         new Error('Quota exceeded 429')
       );
 
@@ -198,6 +200,20 @@ describe('HTTP API Endpoints Integration Tests', () => {
 
       expect(res.body.status).toBe('error');
       expect(res.body.code).toBe(ErrorCodes.GEO_REQUIRED);
+    });
+
+    it('should return 400 instead of crashing when request validation fails', async () => {
+      const res = await request(app)
+        .post('/api/recommendations')
+        .send({
+          mode: 'normal',
+          userLocation: { lat: 37.4979, lng: 127.0276 }
+        })
+        .expect(400);
+
+      expect(res.body.status).toBe('error');
+      expect(res.body.code).toBe(ErrorCodes.INVALID_TOTAL_TIME);
+      expect(res.body.message).toContain('Invalid input');
     });
 
     it('should return 400 with SCHEDULED_MEAL_UNSUPPORTED if future planning keywords are detected', async () => {
@@ -233,7 +249,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       const res = await request(app)
         .post('/api/recommendations')
         .send({
-          query: '상사랑 점심 40분 도보 1만원 조용한 분위기 제외음식없음',
+          query: '친구랑 조용한 분위기로 점심 먹으려고 해. 60분, 도보, 예산 12000원, 매운 음식 제외하고',
           mode: 'normal',
           userLocation: { lat: 37.4979, lng: 127.0276 }
         })
@@ -288,6 +304,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
           answers: {
             transportMode: 'walk',
             budgetPerPersonKrw: 10000,
+            partyContext: '친구',
             vibe: '조용한',
             excludedFoods: []
           }

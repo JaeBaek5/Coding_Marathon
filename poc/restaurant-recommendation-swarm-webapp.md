@@ -1,4 +1,4 @@
-# Mumuk Swarm MVP - 반응형 식당 추천 웹앱 작업 계획
+﻿# Mumuk Swarm MVP - 반응형 식당 추천 웹앱 작업 계획
 
 ## TL;DR
 
@@ -395,60 +395,6 @@ Gimel may not use:
 
 If a field is `null` or unavailable and extraction fails, Gimel must omit it. If negative reviews exist, Gimel can mention the `cons` line neutrally, but it must not hide the existence of downsides in review summary data.
 
-### Bounded Agent Rules
-
-Each agent in the swarm operates under hard tool restrictions and explicit forbidden behavior lists, following the omo harness discipline pattern. These are runtime constraints, not suggestions.
-
-#### Tool Restriction Matrix
-
-| Agent | Allowed Capabilities | Hard Denied |
-|---|---|---|
-| **Orchestrator** | session state management, delegate to Aleph/Bet/Gimel, assemble final API response | direct provider search, slot parsing, ranking, grounded reason generation, fact invention |
-| **Aleph** | LLM client (slot parsing only), Zod schema validation | provider API calls, inventing coordinates from prose, inventing slot values, calling Bet/Gimel |
-| **Bet** | Kakao Local, Kakao Mobility, NAVER Directions, cache, dedupe, deterministic ranking, venue-type gating | LLM-based ranking, LLM constraint relaxation, fabricating candidates or routes, calling Gimel |
-| **Gimel** | LLM client (explanation only), Naver review extraction tools, Naver Place Apollo hydration | reordering candidates, mentioning raw coordinates, fabricating reviews/ratings/prices/hours, calling Bet |
-
-#### Per-Agent Hard Blocks
-
-**Orchestrator — MUST NOT:**
-- Parse slots or invent slot values
-- Call provider APIs (Kakao, NAVER) directly
-- Generate grounded reasons or review summaries
-- Change candidate order received from Bet
-- Add facts not present in Bet output or Gimel output
-
-**Aleph — MUST NOT:**
-- Invent coordinates or location data from natural-language prose
-- Accept more than 2 follow-up rounds from the user
-- Return a `location` field in its slot proposal (`location` arrives as structured client payload only)
-- Call any provider API to validate or enrich slot answers
-
-**Bet — MUST NOT:**
-- Use LLM to rank, score, or filter candidates
-- Use LLM to relax hard constraints (budget limit, time budget, excluded foods, venue-type gating)
-- Include cafes or bars in results unless slot `vibe` or `partyContext` contains an explicit intent keyword: `카페`, `커피`, `디저트`, `cafe`, `coffee`, `dessert`, `술`, `맥주`, `와인`, `호프`, `술집`, `bar`, `pub`, `alcohol`
-- Fabricate route times, distances, or any candidate metadata
-- Return more than 5 candidates after ranking
-
-**Gimel — MUST NOT:**
-- Reorder the candidate list received from Bet
-- Mention raw latitude or longitude values in generated text
-- Fabricate review text, ratings, prices, opening hours, popularity, or menu items
-- State claims about a candidate that are not backed by extraction tool output or provider metadata
-- Forward raw provider payloads to the LLM prompt
-
-#### Anti-Duplication Rule
-
-Once an orchestrating step delegates a search or enrichment to another agent, the delegating step must not re-execute the same search itself. It waits for the delegated result. Delegated output is ground truth for the next step.
-
-#### Acceptance Criteria Format
-
-Every task `Verify` section must be agent-executable. "User manually verifies" is not an acceptable criterion. Each acceptance criterion must specify:
-
-- The exact command to run (e.g., `npm run test:contract`, `curl`, `node script.mjs`)
-- The expected output, exit code, or parsed assertion
-- The evidence file path under `.omo/evidence/task-{N}-{slug}.{ext}`
-
 ### Recommendation Presentation and Feedback Flow
 
 The backend may compute a Top 5 candidate pool, but the user-facing recommendation flow is sequential:
@@ -486,11 +432,11 @@ API/client contract impact:
 - [x] Task 3: Implement Aleph slot parsing and follow-up validation
 - [x] Task 4: Implement provider adapter boundaries and normalization for Bet
 - [x] Task 5: Implement Bet deterministic search, route, filter, and ranking pipeline
-- [x] Task 6: Implement Gimel grounded reason generation and review extraction
+- [ ] Task 6: Implement Gimel grounded reason generation and review extraction
 - [x] Task 7: Implement Orchestrator supervisor flow and backend HTTP wiring
-- [x] Task 8: Implement frontend natural-language request and follow-up form flow
+- [ ] Task 8: Implement frontend natural-language request and follow-up form flow
 - [x] Task 9: Implement results UI, grounded reasons, and map metadata rendering
-- [x] Task 10: Harden smoke coverage, observability, and compatibility checks
+- [ ] Task 10: Harden smoke coverage, observability, and compatibility checks
 
 ## Execution Waves
 

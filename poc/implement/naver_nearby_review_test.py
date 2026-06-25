@@ -30,7 +30,9 @@ import re
 import sys
 import json
 import random
+import datetime as dt
 import requests
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -48,6 +50,9 @@ vision_client = OpenAI(
 MOBILE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+)
+NAVER_PLACE_ID_RE = re.compile(
+    r"(?:m|pcmap)\.place\.naver\.com/(?:place|restaurant|hairshop|beauty|hospital|accommodation|cafe)/(\d+)"
 )
 
 
@@ -93,17 +98,43 @@ def resolve_place_id(title: str, address: str):
         timeout=10,
     )
     r.encoding = "utf-8"
-    m = re.search(
-        r"m\.place\.naver\.com/(?:place|restaurant|hairshop|beauty|hospital|accommodation|cafe)/(\d+)",
-        r.text,
-    )
+    m = NAVER_PLACE_ID_RE.search(r.text)
     return m.group(1) if m else None
+
+
+def canonicalize_naver_place_url(url: str):
+    if not url:
+        return None
+    try:
+        parts = urlsplit(url)
+        query = urlencode(
+            [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "timestamp"]
+        )
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+    except Exception:
+        return re.sub(r"([?&])timestamp=[^&]+&?", r"\1", str(url)).rstrip("?&")
+
+
+def summarize_reviews(reviews: list[dict]):
+    if not reviews:
+        return {"pros": None, "cons": None}
+    positive = [review for review in reviews if isinstance(review.get("rating"), (int, float)) and review["rating"] >= 4]
+    negative = [review for review in reviews if isinstance(review.get("rating"), (int, float)) and review["rating"] <= 2]
+    pros_source = positive[0] if positive else reviews[0]
+    cons_source = negative[0] if negative else next(
+        (review for review in reviews if isinstance(review.get("rating"), (int, float)) and review["rating"] == 3),
+        None,
+    )
+    return {
+        "pros": re.sub(r"\s+", " ", pros_source["body"])[:120] if pros_source.get("body") else None,
+        "cons": re.sub(r"\s+", " ", cons_source["body"])[:120] if cons_source and cons_source.get("body") else None,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────
 # 3) place_id 로 방문자 리뷰 직접 파싱 (1.py 의 로직과 동일)
 # ──────────────────────────────────────────────────────────────────
-def fetch_naver_reviews(place_id: str, limit: int = 10):
+def fetch_naver_reviews(place_id: str, limit: int = 20):
     headers = {
         "User-Agent": MOBILE_UA,
         "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
@@ -130,10 +161,37 @@ def fetch_naver_reviews(place_id: str, limit: int = 10):
             continue
 
         reviews = _parse_reviews_from_state(state)
+        review_snippets = [review["body"] for review in reviews[: min(limit, 20)]]
         if reviews:
-            return {"source": url, "count": len(reviews), "reviews": reviews[:limit]}
+            return {
+                "provider": "naver",
+                "placeId": place_id,
+                "placeUrl": canonicalize_naver_place_url(url),
+                "source": canonicalize_naver_place_url(url),
+                "count": len(reviews[:limit]),
+                "reviewCount": len(reviews[:limit]),
+                "reviews": reviews[:limit],
+                "reviewSummary": summarize_reviews(reviews[:limit]),
+                "reviewSnippets": review_snippets,
+                "extractionMethod": "static-hydration",
+                "fetchedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "error": None,
+            }
 
-    return {"source": None, "count": 0, "reviews": []}
+    return {
+        "provider": "naver",
+        "placeId": place_id,
+        "placeUrl": None,
+        "source": None,
+        "count": 0,
+        "reviewCount": 0,
+        "reviews": [],
+        "reviewSummary": {"pros": None, "cons": None},
+        "reviewSnippets": [],
+        "extractionMethod": "unavailable",
+        "fetchedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "error": "No reviews extracted from Naver Place page",
+    }
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -276,7 +334,7 @@ def _parse_reviews_from_state(state: dict):
             reviews.append({
                 "author": resolve_author(v),
                 "rating": v.get("rating") or v.get("starRating"),
-                "date": v.get("visited") or v.get("visitDate") or v.get("created"),
+                "visitedAt": v.get("visited") or v.get("visitDate") or v.get("created"),
                 "body": body.strip(),
             })
     return reviews
@@ -328,6 +386,8 @@ def run(location: str, sample_count: int):
             "menuItems": menu_items,
             "foodPhotos": photos["food"],
             "reviews": result["reviews"],
+            "reviewSummary": result["reviewSummary"],
+            "reviewSnippets": result["reviewSnippets"],
         })
         print(f"   💾 저장: {saved_path}")
         print()

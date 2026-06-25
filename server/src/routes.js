@@ -7,9 +7,7 @@ import {
 } from '../../shared/contracts/schemas.js';
 import { orchestrator } from './services/orchestrator.js';
 import { sessions } from './services/sessions.js';
-import { KakaoLocalAdapter } from './adapters/kakaoLocalAdapter.js';
-import { normalizeKakaoKeywordLocation } from './adapters/normalization.js';
-import { cache, cacheTTLs } from './utils/cache.js';
+import { searchLocation } from './adapters/index.js';
 import { logger } from './utils/logger.js';
 import { getPublicConfig } from './config/publicConfig.js';
 
@@ -38,6 +36,11 @@ export function mapErrorCodeToStatus(code) {
   }
 }
 
+function formatValidationMessage(error) {
+  const issues = error?.issues || error?.errors || [];
+  return issues.map((issue) => issue.message).join(', ');
+}
+
 export function createApiRouter(options = {}) {
   const router = express.Router();
   const orchestratorService = options.orchestratorService || orchestrator;
@@ -59,26 +62,14 @@ export function createApiRouter(options = {}) {
       return res.json([]);
     }
 
-    const kakaoLocal = new KakaoLocalAdapter();
-    const cacheKey = `keyword:${q}`;
-    let searchResult;
-
     try {
-      const cached = cache.get(cacheKey);
-      if (cached) {
-        logger.info('Cache HIT for location keyword search', {
-          requestId: req.id,
-          cacheKey
-        });
-        searchResult = cached;
-      } else {
-        logger.info('Cache MISS for location keyword search', {
-          requestId: req.id,
-          cacheKey
-        });
-        searchResult = await kakaoLocal.searchKeyword(q);
-        cache.set(cacheKey, searchResult, cacheTTLs.LOCATION);
-      }
+      const normalized = await searchLocation(q);
+      return res.json(
+        normalized.map((item) => ({
+          ...item,
+          coords: item.location
+        }))
+      );
     } catch (err) {
       logger.error('Provider Error: Location search failed', err, {
         requestId: req.id,
@@ -100,17 +91,6 @@ export function createApiRouter(options = {}) {
           missingFields: []
         });
     }
-
-    const rawDocs = searchResult?.documents || [];
-    const normalized = rawDocs.map((doc) => {
-      const item = normalizeKakaoKeywordLocation(doc);
-      return {
-        ...item,
-        coords: item.location
-      };
-    });
-
-    return res.json(normalized);
   });
 
   router.post('/api/recommendations', async (req, res) => {
@@ -119,9 +99,7 @@ export function createApiRouter(options = {}) {
       return res.status(400).json({
         status: 'error',
         code: ErrorCodes.INVALID_TOTAL_TIME,
-        message: parseResult.error.errors
-          .map((error) => error.message)
-          .join(', '),
+        message: formatValidationMessage(parseResult.error),
         missingFields: []
       });
     }
@@ -179,9 +157,7 @@ export function createApiRouter(options = {}) {
       return res.status(400).json({
         status: 'error',
         code: ErrorCodes.INVALID_TOTAL_TIME,
-        message: parseResult.error.errors
-          .map((error) => error.message)
-          .join(', '),
+        message: formatValidationMessage(parseResult.error),
         missingFields: []
       });
     }

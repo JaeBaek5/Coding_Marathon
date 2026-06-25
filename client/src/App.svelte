@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { createSessionStore } from './lib/stores/session.svelte.js';
   import Header from './lib/components/Header.svelte';
   import QueryForm from './lib/components/QueryForm.svelte';
@@ -12,6 +13,10 @@
   function handleReset() {
     session.reset();
   }
+
+  onMount(() => {
+    session.initializeLocation();
+  });
 </script>
 
 <div class="app-shell">

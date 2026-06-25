@@ -101,7 +101,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -116,7 +116,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -131,7 +131,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -147,7 +147,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         }
       ],
@@ -171,7 +171,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -182,7 +182,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -193,7 +193,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         }
       ],
@@ -218,7 +218,7 @@ describe('Bet Agent Unit', () => {
       transportMode: 'walk',
       confidenceBadge: 'high',
       reason: '',
-      providerAttribution: 'Kakao Local / Kakao Mobility',
+      providerAttribution: 'Naver Local Search / Walk estimate',
       path: []
     }));
 
@@ -232,5 +232,162 @@ describe('Bet Agent Unit', () => {
     expect(ranked.map((candidate) => candidate.id)).not.toContain(
       'candidate-6'
     );
+  });
+
+  it('excludes cafes and bars unless the slot bundle explicitly allows them', async () => {
+    const logger = createLogger();
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi.fn().mockResolvedValue([
+        createCandidate({ id: 'restaurant-1', name: '든든한국밥', category: '한식' }),
+        createCandidate({ id: 'cafe-1', name: '모닝커피', category: '카페' }),
+        createCandidate({ id: 'bar-1', name: '즐거운술집', category: '술집' })
+      ]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 400)),
+      logger
+    });
+
+    const defaultResult = await agent.search(
+      createSlots({ venueIntentExplicit: false }),
+      { now: '2026-05-20T12:00:00+09:00' }
+    );
+
+    expect(defaultResult.status).toBe('results');
+    expect(defaultResult.results.map((item) => item.id)).toEqual(['restaurant-1']);
+
+    const explicitResult = await agent.search(
+      createSlots({ venueIntentExplicit: true }),
+      { now: '2026-05-20T12:00:00+09:00' }
+    );
+
+    expect(explicitResult.results.map((item) => item.id)).toEqual([
+      'restaurant-1',
+      'cafe-1',
+      'bar-1'
+    ]);
+  });
+});
+
+describe('Bet Agent – Venue-Type Gating', () => {
+  const cafeCandidate = {
+    id: 'cafe-1',
+    name: '스타벅스 강남점',
+    category: '카페',
+    address: '서울 강남구',
+    location: { lat: 37.501, lng: 127.031 },
+    priceLevel: null,
+    openingHours: null,
+    rating: null,
+    reviewCount: null,
+    reviewSummary: null,
+    openStatus: null
+  };
+
+  const barCandidate = {
+    id: 'bar-1',
+    name: '맥주창고 강남점',
+    category: '술집',
+    address: '서울 강남구',
+    location: { lat: 37.502, lng: 127.032 },
+    priceLevel: null,
+    openingHours: null,
+    rating: null,
+    reviewCount: null,
+    reviewSummary: null,
+    openStatus: null
+  };
+
+  const restaurantCandidate = {
+    id: 'rest-1',
+    name: '깔끔한국밥',
+    category: '한식',
+    address: '서울 강남구',
+    location: { lat: 37.503, lng: 127.033 },
+    priceLevel: null,
+    openingHours: null,
+    rating: null,
+    reviewCount: null,
+    reviewSummary: null,
+    openStatus: null
+  };
+
+  function createRoute(durationMinutes = 5, distanceMeters = 400) {
+    return { durationMinutes, distanceMeters, path: [] };
+  }
+
+  function createSlots(overrides = {}) {
+    return {
+      mode: 'normal',
+      location: { lat: 37.4979, lng: 127.0276 },
+      mealPeriod: 'lunch',
+      totalTimeMinutes: 60,
+      transportMode: 'walk',
+      budgetPerPersonKrw: 15000,
+      partyContext: '친구',
+      vibe: '캐주얼',
+      excludedFoods: [],
+      ...overrides
+    };
+  }
+
+  function createLogger() {
+    return { info: vi.fn(), error: vi.fn() };
+  }
+
+  it('excludes cafes and bars by default when the prompt has no explicit cafe/bar intent', async () => {
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi
+        .fn()
+        .mockResolvedValue([cafeCandidate, barCandidate, restaurantCandidate]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute()),
+      logger: createLogger()
+    });
+
+    const result = await agent.search(createSlots(), {
+      now: '2026-06-26T12:00:00+09:00'
+    });
+
+    expect(result.status).toBe('results');
+    const ids = result.results.map((c) => c.id);
+    expect(ids).not.toContain('cafe-1');
+    expect(ids).not.toContain('bar-1');
+    expect(ids).toContain('rest-1');
+  });
+
+  it('includes cafes when the slot vibe explicitly requests 카페', async () => {
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi
+        .fn()
+        .mockResolvedValue([cafeCandidate, restaurantCandidate]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute()),
+      logger: createLogger()
+    });
+
+    const result = await agent.search(
+      createSlots({ venuePreference: 'cafe' }),
+      { now: '2026-06-26T12:00:00+09:00' }
+    );
+
+    expect(result.status).toBe('results');
+    const ids = result.results.map((c) => c.id);
+    expect(ids).toContain('cafe-1');
+  });
+
+  it('includes bars when slot partyContext explicitly requests 술', async () => {
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi
+        .fn()
+        .mockResolvedValue([barCandidate, restaurantCandidate]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute()),
+      logger: createLogger()
+    });
+
+    const result = await agent.search(
+      createSlots({ venuePreference: 'bar' }),
+      { now: '2026-06-26T12:00:00+09:00' }
+    );
+
+    expect(result.status).toBe('results');
+    const ids = result.results.map((c) => c.id);
+    expect(ids).toContain('bar-1');
   });
 });

@@ -1,4 +1,5 @@
 import { ErrorCodes } from '../../../shared/contracts/schemas.js';
+import { isVenueAllowed } from '../utils/venueGating.js';
 
 export class RankingValidationError extends Error {
   constructor(message, code) {
@@ -156,7 +157,7 @@ function getCandidatePrice(candidate) {
  * @param {string} nowStr
  * @returns {Array} Up to 5 ranked candidates
  */
-export function rankCandidates(candidates, slot, nowStr) {
+export function rankCandidates(candidates, slot, nowStr, topN = 5) {
   const {
     totalTimeMinutes,
     transportMode,
@@ -184,6 +185,10 @@ export function rankCandidates(candidates, slot, nowStr) {
       candidate.oneWayRouteMinutes >= 0;
 
     if (!hasRoute) {
+      continue;
+    }
+
+    if (!isVenueAllowed(candidate, slot)) {
       continue;
     }
 
@@ -234,6 +239,7 @@ export function rankCandidates(candidates, slot, nowStr) {
       continue;
     }
 
+    // Hard filter: Venue-type gating — decision is driven by Aleph's structured venuePreference slot
     // Hard filter: Opening hours window check
     if (
       candidate.openingHours !== null &&
@@ -396,6 +402,16 @@ export function rankCandidates(candidates, slot, nowStr) {
             ? candidate.openStatus
             : null;
 
+      const scoreComponents = {
+        timeFit,
+        distanceFit,
+        contextFit,
+        vibeFit,
+        budgetFit,
+        metadataConfidence,
+        categorySafety
+      };
+
       return {
         ...candidate,
         totalExpectedMinutes,
@@ -403,14 +419,10 @@ export function rankCandidates(candidates, slot, nowStr) {
         openStatus,
         scoreTotal,
         metadataConfidence,
-        scoreComponents: {
-          timeFit,
-          distanceFit,
-          contextFit,
-          vibeFit,
-          budgetFit,
-          metadataConfidence,
-          categorySafety
+        scoreComponents,
+        scoreBreakdown: {
+          total: scoreTotal,
+          components: scoreComponents
         }
       };
     }
@@ -430,5 +442,8 @@ export function rankCandidates(candidates, slot, nowStr) {
     return (a.name || '').localeCompare(b.name || '', 'ko');
   });
 
-  return scoredCandidates.slice(0, 5);
+  const normalizedTopN =
+    Number.isInteger(topN) && topN > 0 ? topN : 5;
+
+  return scoredCandidates.slice(0, normalizedTopN);
 }

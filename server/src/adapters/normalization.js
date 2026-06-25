@@ -4,22 +4,27 @@ import {
   LocationSearchResultSchema
 } from '../../../shared/contracts/schemas.js';
 
-export function normalizeKakaoLocalCandidate(rawDoc) {
-  const categorySegment = rawDoc.category_name
-    ? rawDoc.category_name.split(' > ')[1] ||
-      rawDoc.category_name.split(' > ')[0] ||
-      '음식점'
-    : '음식점';
+function stripHtml(value) {
+  return String(value || '').replace(/<\/?b>/gi, '');
+}
+
+export function normalizeNaverLocalItem(item) {
+  const title = stripHtml(item.title);
+  const categoryParts = String(item.category || '').split('>');
+  const category =
+    categoryParts[categoryParts.length - 1]?.trim() ||
+    categoryParts[0]?.trim() ||
+    '음식점';
+  const lat = Number(item.mapy) / 1e7;
+  const lng = Number(item.mapx) / 1e7;
 
   return {
-    id: String(rawDoc.id),
-    name: rawDoc.place_name,
-    category: categorySegment,
-    address: rawDoc.road_address_name || rawDoc.address_name || '',
-    location: {
-      lat: parseFloat(rawDoc.y),
-      lng: parseFloat(rawDoc.x)
-    },
+    id: item.link || title,
+    name: title,
+    category,
+    address: item.roadAddress || item.address || '',
+    location: { lat, lng },
+    placeUrl: item.link || null,
     priceLevel: null,
     openingHours: null,
     rating: null,
@@ -29,49 +34,18 @@ export function normalizeKakaoLocalCandidate(rawDoc) {
   };
 }
 
-export function normalizeKakaoKeywordLocation(rawDoc) {
-  const item = {
-    id: String(rawDoc.id),
-    name: rawDoc.place_name,
-    address: rawDoc.road_address_name || rawDoc.address_name || '',
-    location: {
-      lat: parseFloat(rawDoc.y),
-      lng: parseFloat(rawDoc.x)
-    }
-  };
-  return LocationSearchResultSchema.parse(item);
+export function normalizeNaverKeywordLocation(item) {
+  const normalized = normalizeNaverLocalItem(item);
+  return LocationSearchResultSchema.parse({
+    id: normalized.id,
+    name: normalized.name,
+    address: normalized.address,
+    location: normalized.location
+  });
 }
 
-export function normalizeKakaoWalkingRoute(rawRoute) {
-  if (!rawRoute.routes || rawRoute.routes.length === 0) {
-    throw new Error('No walking routes found');
-  }
-
-  const route = rawRoute.routes[0];
-  const distanceMeters = Math.round(route.summary.distance);
-  const durationMinutes = Math.round(route.summary.duration / 60);
-
-  const pathCoords = [];
-  if (route.sections?.[0]?.roads) {
-    for (const road of route.sections[0].roads) {
-      if (road.vertexes) {
-        for (let i = 0; i < road.vertexes.length; i += 2) {
-          pathCoords.push({
-            lng: road.vertexes[i],
-            lat: road.vertexes[i + 1]
-          });
-        }
-      }
-    }
-  }
-
-  const result = {
-    durationMinutes,
-    distanceMeters,
-    path: pathCoords
-  };
-
-  return NormalizedRouteSchema.parse(result);
+export function normalizeWalkingRoute(route) {
+  return NormalizedRouteSchema.parse(route);
 }
 
 export function normalizeNaverDrivingRoute(rawRoute) {
@@ -112,8 +86,8 @@ export function mergeCandidateWithRoute(candidate, route, transportMode) {
 
   const providerAttribution =
     transportMode === 'walk'
-      ? 'Kakao Local / Kakao Mobility'
-      : 'Kakao Local / NAVER Maps';
+      ? 'Naver Local Search / Walk estimate'
+      : 'Naver Local Search / Naver Maps';
 
   const merged = {
     ...candidate,

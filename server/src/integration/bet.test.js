@@ -134,6 +134,72 @@ describe('Bet Agent Integration', () => {
     expect(result.eligibleCount).toBe(3);
   });
 
+  it('excludes cafe and bar candidates by default when no explicit intent present', async () => {
+    const logger = createLogger();
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi.fn().mockResolvedValue([
+        createCandidate(1, { id: 'cafe-1', name: '스타벅스 강남점', category: '카페' }),
+        createCandidate(2, { id: 'bar-1', name: '맥주창고', category: '술집' }),
+        createCandidate(3, { id: 'rest-1', name: '깔끔국밥', category: '한식' })
+      ]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 300)),
+      logger
+    });
+
+    const result = await agent.search(
+      createSlots({ partyContext: '상사', vibe: '조용한' }),
+      { now: '2026-06-26T12:00:00+09:00' }
+    );
+
+    expect(result.status).toBe('results');
+    const ids = result.results.map((c) => c.id);
+    expect(ids).not.toContain('cafe-1');
+    expect(ids).not.toContain('bar-1');
+    expect(ids).toContain('rest-1');
+  });
+
+  it('includes cafes when the slot venuePreference is cafe', async () => {
+    const logger = createLogger();
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi.fn().mockResolvedValue([
+        createCandidate(1, { id: 'cafe-1', name: '스타벅스 강남점', category: '카페' }),
+        createCandidate(2, { id: 'rest-1', name: '깔끔국밥', category: '한식' })
+      ]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 300)),
+      logger
+    });
+
+    const result = await agent.search(
+      createSlots({ venuePreference: 'cafe' }),
+      { now: '2026-06-26T12:00:00+09:00' }
+    );
+
+    expect(result.status).toBe('results');
+    const ids = result.results.map((c) => c.id);
+    expect(ids).toContain('cafe-1');
+  });
+
+  it('includes bars when the slot venuePreference is bar', async () => {
+    const logger = createLogger();
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi.fn().mockResolvedValue([
+        createCandidate(1, { id: 'bar-1', name: '맥주창고', category: '술집' }),
+        createCandidate(2, { id: 'rest-1', name: '깔끔국밥', category: '한식' })
+      ]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 300)),
+      logger
+    });
+
+    const result = await agent.search(
+      createSlots({ venuePreference: 'bar' }),
+      { now: '2026-06-26T12:00:00+09:00' }
+    );
+
+    expect(result.status).toBe('results');
+    const ids = result.results.map((c) => c.id);
+    expect(ids).toContain('bar-1');
+  });
+
   it('preserves the pre-routing candidate window by ignoring matches beyond the first 20 raw docs', async () => {
     const logger = createLogger();
     const firstTwentyCandidates = Array.from({ length: 20 }, (_, index) =>

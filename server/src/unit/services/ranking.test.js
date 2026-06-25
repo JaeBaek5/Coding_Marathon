@@ -423,6 +423,36 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
     });
   });
 
+  describe('scoreBreakdown output shape', () => {
+    it('should include scoreBreakdown: { total, components } on each ranked candidate', () => {
+      const slot = {
+        totalTimeMinutes: 45,
+        transportMode: 'walk',
+        excludedFoods: [],
+        partyContext: '상사',
+        vibe: 'casual',
+        budgetPerPersonKrw: 10000
+      };
+      const candidates = [
+        {
+          id: '1',
+          name: '깔끔국밥',
+          category: '한식',
+          address: '서울',
+          oneWayRouteMinutes: 5,
+          distanceMeters: 400
+        }
+      ];
+      const results = rankCandidates(candidates, slot);
+      expect(results[0]).toHaveProperty('scoreBreakdown');
+      expect(results[0].scoreBreakdown).toHaveProperty('total');
+      expect(results[0].scoreBreakdown).toHaveProperty('components');
+      expect(typeof results[0].scoreBreakdown.total).toBe('number');
+      expect(typeof results[0].scoreBreakdown.components).toBe('object');
+      expect(results[0].scoreBreakdown.components).toHaveProperty('timeFit');
+    });
+  });
+
   describe('Deterministic Sorting and Tie-Breakers', () => {
     it('should sort primarily by scoreTotal (descending), then lower totalExpectedMinutes, then higher metadataConfidence, then alphabetical', () => {
       const slot = {
@@ -469,6 +499,95 @@ describe('Ranking and Time-Budget Scoring Engine', () => {
       expect(results[0].id).toBe('A');
       expect(results[1].id).toBe('B');
       expect(results[2].id).toBe('C');
+    });
+  });
+
+  describe('Venue-Type Gating', () => {
+    const baseSlot = {
+      totalTimeMinutes: 45,
+      transportMode: 'walk',
+      excludedFoods: [],
+      partyContext: '상사',
+      vibe: 'casual',
+      budgetPerPersonKrw: 10000
+    };
+
+    function makeVenueCandidate(id, name, category) {
+      return {
+        id,
+        name,
+        category,
+        address: '서울 강남구',
+        oneWayRouteMinutes: 5,
+        distanceMeters: 400
+      };
+    }
+
+    it('excludes cafe-category candidates by default', () => {
+      const candidates = [
+        makeVenueCandidate('c1', '스타벅스', '카페'),
+        makeVenueCandidate('r1', '깔끔국밥', '한식')
+      ];
+      const results = rankCandidates(candidates, baseSlot);
+      expect(results.map((c) => c.id)).not.toContain('c1');
+      expect(results.map((c) => c.id)).toContain('r1');
+    });
+
+    it('excludes bar/pub-category candidates by default', () => {
+      const candidates = [
+        makeVenueCandidate('b1', '맥주창고', '술집'),
+        makeVenueCandidate('b2', '호프집', '호프/요리주점'),
+        makeVenueCandidate('r1', '깔끔국밥', '한식')
+      ];
+      const results = rankCandidates(candidates, baseSlot);
+      const ids = results.map((c) => c.id);
+      expect(ids).not.toContain('b1');
+      expect(ids).not.toContain('b2');
+      expect(ids).toContain('r1');
+    });
+
+    it('includes cafes when venuePreference is cafe', () => {
+      const cafeSlot = { ...baseSlot, venuePreference: 'cafe' };
+      const candidates = [
+        makeVenueCandidate('c1', '스타벅스', '카페'),
+        makeVenueCandidate('r1', '깔끔국밥', '한식')
+      ];
+      const results = rankCandidates(candidates, cafeSlot);
+      expect(results.map((c) => c.id)).toContain('c1');
+    });
+
+    it('includes bars when venuePreference is bar', () => {
+      const barSlot = { ...baseSlot, venuePreference: 'bar' };
+      const candidates = [
+        makeVenueCandidate('b1', '맥주창고', '술집'),
+        makeVenueCandidate('r1', '깔끔국밥', '한식')
+      ];
+      const results = rankCandidates(candidates, barSlot);
+      expect(results.map((c) => c.id)).toContain('b1');
+    });
+
+    it('includes both cafes and bars when venuePreference is any', () => {
+      const anySlot = { ...baseSlot, venuePreference: 'any' };
+      const candidates = [
+        makeVenueCandidate('c1', '스타벅스', '카페'),
+        makeVenueCandidate('b1', '맥주창고', '술집'),
+        makeVenueCandidate('r1', '깔끔국밥', '한식')
+      ];
+      const results = rankCandidates(candidates, anySlot);
+      const ids = results.map((c) => c.id);
+      expect(ids).toContain('c1');
+      expect(ids).toContain('b1');
+      expect(ids).toContain('r1');
+    });
+
+    it('excludes cafes even when vibe text mentions 카페 without venuePreference field', () => {
+      const slotWithVibe = { ...baseSlot, vibe: '카페에서 조용히', venuePreference: 'restaurant' };
+      const candidates = [
+        makeVenueCandidate('c1', '스타벅스', '카페'),
+        makeVenueCandidate('r1', '깔끔국밥', '한식')
+      ];
+      const results = rankCandidates(candidates, slotWithVibe);
+      expect(results.map((c) => c.id)).not.toContain('c1');
     });
   });
 

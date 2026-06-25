@@ -37,5 +37,8 @@
   },
   "dependencies": {
     "vite": "8.0.16"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-darwin-arm64": "^1.1.3"
   }
 }

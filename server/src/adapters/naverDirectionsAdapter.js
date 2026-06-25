@@ -1,22 +1,17 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const fixturesDir = path.resolve(__dirname, '../fixtures');
+function getMapsCredentials() {
+  return {
+    clientId: process.env.NAVER_CLIENT_ID,
+    clientSecret: process.env.NAVER_CLIENT_SECRET
+  };
+}
 
 export class NaverDirectionsAdapter {
-  constructor() {
-    this.clientId = process.env.NAVER_CLIENT_ID;
-    this.clientSecret = process.env.NAVER_CLIENT_SECRET;
-  }
-
   async getDrivingRoute(startLat, startLng, goalLat, goalLng) {
-    if (!this.clientId || !this.clientSecret) {
-      const filePath = path.join(fixturesDir, 'naver-driving-response.json');
-      const data = await fs.readFile(filePath, 'utf8');
-      return JSON.parse(data);
+    const { clientId, clientSecret } = getMapsCredentials();
+    if (!clientId || !clientSecret) {
+      throw new Error(
+        'NAVER_CLIENT_ID/SECRET 없음 (Naver Cloud Directions API 키 필요)'
+      );
     }
 
     const url = new URL(
@@ -28,8 +23,8 @@ export class NaverDirectionsAdapter {
 
     const response = await fetch(url, {
       headers: {
-        'X-NCP-APIGW-API-KEY-ID': this.clientId,
-        'X-NCP-APIGW-API-KEY': this.clientSecret
+        'X-NCP-APIGW-API-KEY-ID': clientId,
+        'X-NCP-APIGW-API-KEY': clientSecret
       }
     });
 
