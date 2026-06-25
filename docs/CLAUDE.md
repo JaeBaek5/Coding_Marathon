@@ -60,3 +60,33 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Shared Agent Workflow
+
+**Keep multi-agent work plan-backed and visible.**
+
+- Read `.omo/plans/restaurant-recommendation-swarm-webapp.md` before implementation.
+- Treat that plan as the current contract unless the user gives a newer instruction.
+- Update the plan when scope, task order, verification, environment contract, or API contract changes.
+- Do not use the plan as a progress diary. Put run evidence in `.omo/evidence/` and summarize it in the PR.
+- If multiple agents need the same plan area, prefer a small plan-only PR first.
+
+## 6. Git And PR Handoff
+
+**End work by publishing state, not by leaving a hidden local branch.**
+
+- Work on a unique branch per task, for example `codex/task-6-gimel-reviews`.
+- Do not work directly on `main`.
+- Stage only files you changed intentionally.
+- Commit completed logical units with a conventional message.
+- Add `Plan: .omo/plans/restaurant-recommendation-swarm-webapp.md` as a footer for plan implementation commits.
+- Push the branch and open a draft PR when stopping, even if work is partial.
+
+The PR body must include:
+
+- Plan task number(s) touched
+- Verification commands run and results
+- Evidence files under `.omo/evidence/`
+- Known conflicts, blocked items, or follow-up work
+
+If verification cannot run, state the blocker directly. Do not present unverified work as complete.
