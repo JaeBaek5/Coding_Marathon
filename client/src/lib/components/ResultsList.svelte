@@ -1,5 +1,6 @@
 <script>
   const { session } = $props();
+  import AgentCommunicationPanel from './AgentCommunicationPanel.svelte';
 
   function formatDistance(distanceMeters) {
     if (!distanceMeters || typeof distanceMeters !== 'number') {
@@ -190,6 +191,8 @@
       </div>
     {/each}
   </div>
+
+  <AgentCommunicationPanel logs={session.agentCommunicationLog || []} />
 
   <button type="button" class="button-outline reset-btn" onclick={() => session.reset()}>
     새로 추천받기

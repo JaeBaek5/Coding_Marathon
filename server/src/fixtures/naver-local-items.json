@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "title": "든든한국밥",
+      "link": "https://map.naver.com/p/entry/place/111111",
+      "category": "음식점>한식>국밥>순대국",
+      "address": "서울 강남구 역삼동 123-45",
+      "roadAddress": "서울 강남구 테헤란로 123",
+      "mapx": "1270282000",
+      "mapy": "374981000"
+    },
+    {
+      "title": "깔끔초밥",
+      "link": "https://map.naver.com/p/entry/place/222222",
+      "category": "음식점>일식>초밥>일식집",
+      "address": "서울 강남구 역삼동 543-21",
+      "roadAddress": "서울 강남구 강남대로 543",
+      "mapx": "1270255000",
+      "mapy": "374965000"
+    }
+  ]
+}

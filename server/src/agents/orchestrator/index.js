@@ -18,15 +18,9 @@ function randomSessionId() {
 }
 
 function normalizeLocationPayload(payload, defaultSource) {
-  if (!payload) {
-    return null;
-  }
-
+  if (!payload) return null;
   const coords = payload.coords && typeof payload.coords === 'object' ? payload.coords : payload;
-
-  if (typeof coords.lat !== 'number' || typeof coords.lng !== 'number') {
-    return null;
-  }
+  if (typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return null;
 
   const source = VALID_LOCATION_SOURCES.has(payload.source)
     ? payload.source
@@ -38,76 +32,46 @@ function normalizeLocationPayload(payload, defaultSource) {
     lat: coords.lat,
     lng: coords.lng,
     accuracyMeters:
-      typeof payload.accuracyMeters === 'number'
-        ? payload.accuracyMeters
-        : undefined,
+      typeof payload.accuracyMeters === 'number' ? payload.accuracyMeters : undefined,
     source
   };
 }
 
 function toOrchestratorError(code, message, missingFields = []) {
-  return {
-    status: 'error',
-    code,
-    message,
-    missingFields
-  };
+  return { status: 'error', code, message, missingFields };
 }
 
 function isFeedbackPayload(answers) {
-  if (!answers || typeof answers !== 'object') {
-    return false;
-  }
-
-  const action = String(answers.action || '').toLowerCase();
-  return FEEDBACK_ACTIONS.has(action);
+  if (!answers || typeof answers !== 'object') return false;
+  return FEEDBACK_ACTIONS.has(String(answers.action || '').toLowerCase());
 }
 
 function toFeedbackResponse(answers) {
   return {
     action: String(answers.action || '').toLowerCase(),
-    candidateId:
-      typeof answers.candidateId === 'string'
-        ? answers.candidateId
-        : undefined
+    candidateId: typeof answers.candidateId === 'string' ? answers.candidateId : undefined
   };
 }
 
 function ensureSessionCandidateState(session, initialValues = {}) {
   const current = session.candidatePool || [];
-  if (!Array.isArray(session.dislikedCandidateIds)) {
-    session.dislikedCandidateIds = [];
-  }
-  if (!Array.isArray(session.likedCandidateIds)) {
-    session.likedCandidateIds = [];
-  }
+  if (!Array.isArray(session.dislikedCandidateIds)) session.dislikedCandidateIds = [];
+  if (!Array.isArray(session.likedCandidateIds)) session.likedCandidateIds = [];
 
   const disliked = new Set(session.dislikedCandidateIds);
   const filtered = current.filter((candidate) => !disliked.has(candidate.id));
-  if (!Number.isInteger(session.currentRecommendationIndex)) {
-    session.currentRecommendationIndex = 0;
-  }
-  if (!Number.isInteger(session.feedbackDislikeCount)) {
-    session.feedbackDislikeCount = 0;
-  }
-  if (!Number.isInteger(session.feedbackLikeCount)) {
-    session.feedbackLikeCount = 0;
-  }
+  if (!Number.isInteger(session.currentRecommendationIndex)) session.currentRecommendationIndex = 0;
+  if (!Number.isInteger(session.feedbackDislikeCount)) session.feedbackDislikeCount = 0;
+  if (!Number.isInteger(session.feedbackLikeCount)) session.feedbackLikeCount = 0;
 
   Object.assign(session, initialValues);
-
-  return {
-    pool: current,
-    filteredPool: filtered
-  };
+  return { pool: current, filteredPool: filtered };
 }
 
 function nextVisibleIndex(pool, dislikedSet, startIndex) {
   for (let index = startIndex; index < pool.length; index += 1) {
     const candidate = pool[index];
-    if (!candidate || dislikedSet.has(candidate.id)) {
-      continue;
-    }
+    if (!candidate || dislikedSet.has(candidate.id)) continue;
     return index;
   }
   return -1;
@@ -116,20 +80,12 @@ function nextVisibleIndex(pool, dislikedSet, startIndex) {
 function buildDisplayedResult(session) {
   const { candidatePool = [], feedbackDislikeCount = 0 } = session;
   const dislikedSet = new Set(session.dislikedCandidateIds || []);
-  const visiblePool = candidatePool.filter(
-    (candidate) => !dislikedSet.has(candidate.id)
-  );
+  const visiblePool = candidatePool.filter((candidate) => !dislikedSet.has(candidate.id));
   const currentIndexBase = Math.max(0, session.currentRecommendationIndex || 0);
-  const currentIndex = nextVisibleIndex(
-    candidatePool,
-    dislikedSet,
-    currentIndexBase
-  );
+  const currentIndex = nextVisibleIndex(candidatePool, dislikedSet, currentIndexBase);
   const currentRecommendation = currentIndex >= 0 ? candidatePool[currentIndex] : null;
-
-  const revealAll = feedbackDislikeCount >= 2;
   const visibleCurrent = currentRecommendation ? [currentRecommendation] : [];
-  const results = revealAll ? visiblePool : visibleCurrent;
+  const results = feedbackDislikeCount >= 2 ? visiblePool : visibleCurrent;
 
   return {
     results,
@@ -140,15 +96,22 @@ function buildDisplayedResult(session) {
 }
 
 function defaultNoReason(candidate, fallback) {
-  const transportLabel = candidate.transportMode === 'walk' ? '도보' : '차량';
-  return `${fallback} ${transportLabel} 이동 기준으로 추천됩니다.`;
+  const transportLabel = candidate.transportMode === 'walk' ? 'walk' : 'drive';
+  return `${fallback} ${transportLabel} based recommendation reason`;
+}
+
+function toLogSnapshot(session, payload) {
+  return {
+    timestamp: new Date().toISOString(),
+    sessionId: session?.id,
+    ...payload
+  };
 }
 
 export class OrchestratorAgent {
   constructor(dependencies = {}) {
     const betClient = dependencies.bet || defaultBet;
     const gimelClient = dependencies.gimel || defaultGimel;
-
     const alephModule = dependencies.aleph || {
       parseQuery,
       processAnswers: defaultProcessAnswers
@@ -171,14 +134,23 @@ export class OrchestratorAgent {
     const baseCandidates = Array.isArray(candidates) ? candidates : [];
     return baseCandidates.map((candidate) => ({
       ...candidate,
-      reason: candidate.reason || defaultNoReason(candidate, '조건을 충족하는 후보입니다.')
+      reason:
+        candidate.reason ||
+        defaultNoReason(candidate, '추천 근거를 추정해 표시')
     }));
   }
 
   createSession(initialSlots = {}) {
     const sessionId = randomSessionId();
-    const session = this.dependencies.sessions.create(sessionId, initialSlots);
-    return session;
+    return this.dependencies.sessions.create(sessionId, initialSlots);
+  }
+
+  appendAgentLog(session, payload) {
+    if (!session?.id) return null;
+    return this.dependencies.sessions.appendAgentCommunicationLog(
+      session.id,
+      toLogSnapshot(session, payload)
+    );
   }
 
   normalizeStructuredLocation(request) {
@@ -189,36 +161,28 @@ export class OrchestratorAgent {
         mode === 'travel' ? 'selected-location' : 'browser-geolocation'
       );
     }
-    if (mode === 'travel') {
-      return normalizeLocationPayload(
-        request.selectedLocation,
-        'selected-location'
-      );
-    }
+    if (mode === 'travel') return normalizeLocationPayload(request.selectedLocation, 'selected-location');
     return normalizeLocationPayload(request.userLocation, 'browser-geolocation');
   }
 
-  validateLocation(mode, location) {
+  validateLocation(_mode, location) {
     if (!location) {
       return toOrchestratorError(
         ErrorCodes.GEO_REQUIRED,
         'Location is required for recommendation.'
       );
     }
-
     if (typeof location.lat !== 'number' || typeof location.lng !== 'number') {
       return toOrchestratorError(
         ErrorCodes.GEO_REQUIRED,
         'Location must include lat and lng.'
       );
     }
-
     return null;
   }
 
   getCurrentState(session) {
-    const state = ensureSessionCandidateState(session);
-    return state;
+    return ensureSessionCandidateState(session);
   }
 
   async runCandidateFlow(session, slots, now) {
@@ -228,15 +192,56 @@ export class OrchestratorAgent {
       phase: 'candidate_search',
       sessionId: session.id
     });
+    this.appendAgentLog(session, {
+      event: 'agent_hop',
+      fromAgent: 'orchestrator',
+      toAgent: 'bet',
+      phase: 'candidate_search',
+      mode: slots?.mode,
+      transportMode: slots?.transportMode
+    });
 
-    const betResult = await this.dependencies.bet.search(slots, { now });
+    const betResult = await this.dependencies.bet.search(slots, {
+      now,
+      sessionId: session.id,
+      trace: (entry) =>
+        this.appendAgentLog(session, { event: 'bet_trace', ...entry })
+    });
+
     if (betResult.status !== 'results') {
+      this.appendAgentLog(session, {
+        event: 'bet_flow_result',
+        fromAgent: 'bet',
+        toAgent: 'orchestrator',
+        phase: 'non_result',
+        status: betResult.status,
+        code: betResult.code,
+        message: betResult.message
+      });
       return betResult;
     }
+
+    this.appendAgentLog(session, {
+      event: 'bet_flow_result',
+      fromAgent: 'bet',
+      toAgent: 'orchestrator',
+      phase: 'results_ready',
+      status: 'results',
+      count: betResult.eligibleCount,
+      metadata: betResult.metadata
+    });
 
     const reasonedCandidates = await this.dependencies.gimel.generateReasons(
       betResult.results
     );
+    this.appendAgentLog(session, {
+      event: 'gimel_reasons',
+      fromAgent: 'gimel',
+      toAgent: 'orchestrator',
+      phase: 'reasoning_completed',
+      reasonedCount: reasonedCandidates.length
+    });
+
     const candidatePool = this.buildCandidatePoolCandidates(reasonedCandidates);
 
     this.dependencies.sessions.update(session.id, {
@@ -258,13 +263,17 @@ export class OrchestratorAgent {
       candidateCount: candidatePool.length
     });
 
+    const agentCommunicationLog =
+      this.dependencies.sessions.get(session.id)?.agentCommunicationLog || [];
+
     return {
       status: 'results',
       sessionId: session.id,
       eligibleCount: display.eligibleCount,
       results: display.results,
       candidatePool: display.candidatePool,
-      currentRecommendation: display.currentRecommendation
+      currentRecommendation: display.currentRecommendation,
+      agentCommunicationLog
     };
   }
 
@@ -273,7 +282,6 @@ export class OrchestratorAgent {
     const mode = requestPayload.mode || 'normal';
     const location = this.normalizeStructuredLocation(requestPayload);
     const locationError = this.validateLocation(mode, location);
-
     if (locationError) {
       this.dependencies.sessions.delete(session.id);
       return locationError;
@@ -282,16 +290,30 @@ export class OrchestratorAgent {
     const initialSlots = {
       mode,
       location,
-      venuePreference:
-        requestPayload.venuePreference ??
-        (requestPayload.query ? null : null)
+      venuePreference: requestPayload.venuePreference ?? null
     };
+
+    this.appendAgentLog(session, {
+      event: 'request_entered',
+      fromAgent: 'frontend',
+      toAgent: 'orchestrator',
+      mode,
+      promptLength: (requestPayload.query || '').length
+    });
 
     const parseResult = await this.dependencies.aleph.parseQuery(
       requestPayload.query || '',
       initialSlots,
       1
     );
+    this.appendAgentLog(session, {
+      event: 'aleph_parse',
+      fromAgent: 'aleph',
+      toAgent: 'orchestrator',
+      phase: 'parse_complete',
+      status: parseResult.status,
+      missingFields: parseResult.missingFields || []
+    });
 
     if (parseResult.status === 'questions') {
       this.dependencies.sessions.update(session.id, {
@@ -302,7 +324,9 @@ export class OrchestratorAgent {
         status: 'questions',
         sessionId: session.id,
         missingFields: parseResult.missingFields,
-        questions: parseResult.questions
+        questions: parseResult.questions,
+        agentCommunicationLog:
+          this.dependencies.sessions.get(session.id)?.agentCommunicationLog || []
       };
     }
 
@@ -348,6 +372,14 @@ export class OrchestratorAgent {
       session.slots,
       nextRound
     );
+    this.appendAgentLog(session, {
+      event: 'aleph_answers',
+      fromAgent: 'aleph',
+      toAgent: 'orchestrator',
+      phase: 'answers_parsed',
+      status: parseResult.status,
+      missingFields: parseResult.missingFields || []
+    });
 
     this.dependencies.sessions.update(sessionId, {
       turnCount: nextRound,
@@ -359,7 +391,9 @@ export class OrchestratorAgent {
         status: 'questions',
         sessionId,
         missingFields: parseResult.missingFields,
-        questions: parseResult.questions
+        questions: parseResult.questions,
+        agentCommunicationLog:
+          this.dependencies.sessions.get(sessionId)?.agentCommunicationLog || []
       };
     }
 
@@ -387,8 +421,8 @@ export class OrchestratorAgent {
     }
 
     const pool = session.candidatePool;
-    const dislikedSet = new Set(session.dislikedCandidateIds || []);
-    const likedSet = new Set(session.likedCandidateIds || []);
+    const dislikedSet = new Set(session.dislikedCandidateIds);
+    const likedSet = new Set(session.likedCandidateIds);
 
     let targetCandidateId = feedback.candidateId;
     const currentData = buildDisplayedResult(session);
@@ -410,17 +444,13 @@ export class OrchestratorAgent {
     }
 
     if (feedback.action === 'dislike') {
-      if (!dislikedSet.has(targetCandidateId)) {
-        dislikedSet.add(targetCandidateId);
-      }
+      dislikedSet.add(targetCandidateId);
       likedSet.delete(targetCandidateId);
       session.feedbackDislikeCount = (session.feedbackDislikeCount || 0) + 1;
     }
 
     if (feedback.action === 'like') {
-      if (!likedSet.has(targetCandidateId)) {
-        likedSet.add(targetCandidateId);
-      }
+      likedSet.add(targetCandidateId);
       dislikedSet.delete(targetCandidateId);
       session.feedbackLikeCount = (session.feedbackLikeCount || 0) + 1;
     }
@@ -428,14 +458,24 @@ export class OrchestratorAgent {
     const newDisliked = Array.from(dislikedSet);
     const newLiked = Array.from(likedSet);
 
+    this.appendAgentLog(session, {
+      event: 'feedback_applied',
+      fromAgent: 'orchestrator',
+      toAgent: 'orchestrator',
+      candidateId: targetCandidateId,
+      action: feedback.action,
+      dislikedCount: newDisliked.length,
+      likedCount: newLiked.length
+    });
+
     const baseIndex = session.currentRecommendationIndex || 0;
     const updatedIndex = nextVisibleIndex(
       pool,
       new Set(newDisliked),
       feedback.action === 'dislike' ? baseIndex + 1 : baseIndex
     );
-    const finalIndex = updatedIndex >= 0 ? updatedIndex : baseIndex;
 
+    const finalIndex = updatedIndex >= 0 ? updatedIndex : baseIndex;
     this.dependencies.sessions.update(session.id, {
       dislikedCandidateIds: newDisliked,
       likedCandidateIds: newLiked,
@@ -451,7 +491,9 @@ export class OrchestratorAgent {
       eligibleCount: refreshed.eligibleCount,
       results: refreshed.results,
       candidatePool: refreshed.candidatePool,
-      currentRecommendation: refreshed.currentRecommendation
+      currentRecommendation: refreshed.currentRecommendation,
+      agentCommunicationLog:
+        this.dependencies.sessions.get(session.id)?.agentCommunicationLog || []
     };
   }
 }

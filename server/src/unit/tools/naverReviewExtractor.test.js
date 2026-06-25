@@ -50,7 +50,7 @@ describe('extractPlaceIdFromUrl', () => {
   });
 
   it('returns null for non-Naver or malformed URLs', () => {
-    expect(extractPlaceIdFromUrl('https://place.map.kakao.com/111111')).toBeNull();
+    expect(extractPlaceIdFromUrl('https://example.com/place/111111')).toBeNull();
     expect(extractPlaceIdFromUrl(null)).toBeNull();
     expect(extractPlaceIdFromUrl('')).toBeNull();
   });

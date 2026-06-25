@@ -14,6 +14,7 @@ export function createSessionStore() {
   let searchQuery = $state('');
   let locationResults = $state([]);
   let activeResultIndex = $state(0);
+  let agentCommunicationLog = $state([]);
 
   function reset() {
     sessionId = null;
@@ -24,6 +25,7 @@ export function createSessionStore() {
     missingFields = [];
     questions = [];
     results = [];
+    agentCommunicationLog = [];
     error = null;
     loading = false;
     userLocation = null;
@@ -44,6 +46,7 @@ export function createSessionStore() {
     missingFields = [];
     questions = [];
     results = [];
+    agentCommunicationLog = [];
     locationResults = [];
     activeResultIndex = 0;
   }
@@ -269,6 +272,7 @@ export function createSessionStore() {
       status = 'questions';
       missingFields = data.missingFields || [];
       questions = data.questions || [];
+      agentCommunicationLog = data.agentCommunicationLog || [];
       data.questions.forEach((q) => {
         if (!(q.field in answers)) {
           answers[q.field] =
@@ -283,6 +287,7 @@ export function createSessionStore() {
       sessionId = data.sessionId;
       status = 'results';
       results = data.results || [];
+      agentCommunicationLog = data.agentCommunicationLog || [];
       activeResultIndex = 0;
     } else if (data.status === 'error') {
       error = {
@@ -360,6 +365,9 @@ export function createSessionStore() {
     },
     set activeResultIndex(val) {
       activeResultIndex = val;
+    },
+    get agentCommunicationLog() {
+      return agentCommunicationLog;
     },
     reset,
     switchToTravelMode,

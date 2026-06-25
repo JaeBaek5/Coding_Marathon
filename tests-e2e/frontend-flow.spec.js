@@ -67,7 +67,7 @@ test.describe('Mumuk Frontend Flow', () => {
                 distanceMeters: 350,
                 confidenceBadge: 'high',
                 reason: '한식이 먹고 싶을 때 가기 좋은 정갈한 밥집입니다.',
-                providerAttribution: 'Kakao Local / Kakao Mobility',
+                providerAttribution: 'Naver Local Search / Walk estimate',
                 openStatus: true
               }
             ]

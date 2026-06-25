@@ -3,6 +3,7 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 class SessionStore {
   constructor() {
     this.sessions = new Map();
+    this.maxAgentLogsPerSession = 100;
   }
 
   create(sessionId, initialSlots = {}) {
@@ -13,6 +14,7 @@ class SessionStore {
       turnCount: 0,
       feedbackDislikeCount: 0,
       feedbackLikeCount: 0,
+      agentCommunicationLog: [],
       likedCandidateIds: [],
       dislikedCandidateIds: [],
       currentRecommendationIndex: 0,
@@ -71,9 +73,39 @@ class SessionStore {
     if (updates.dislikedCandidateIds !== undefined) {
       session.dislikedCandidateIds = updates.dislikedCandidateIds;
     }
+    if (updates.agentCommunicationLog !== undefined) {
+      session.agentCommunicationLog = updates.agentCommunicationLog;
+    }
 
     session.updatedAt = Date.now();
     return session;
+  }
+
+  appendAgentCommunicationLog(sessionId, event) {
+    const session = this.get(sessionId);
+    if (!session) return null;
+    const entry = {
+      ...event,
+      timestamp: event.timestamp || new Date().toISOString(),
+      seq: typeof session.agentCommunicationLog?.length === 'number'
+        ? session.agentCommunicationLog.length + 1
+        : 1
+    };
+
+    if (!Array.isArray(session.agentCommunicationLog)) {
+      session.agentCommunicationLog = [];
+    }
+
+    session.agentCommunicationLog.push(entry);
+    if (session.agentCommunicationLog.length > this.maxAgentLogsPerSession) {
+      session.agentCommunicationLog.splice(
+        0,
+        session.agentCommunicationLog.length - this.maxAgentLogsPerSession
+      );
+    }
+
+    session.updatedAt = Date.now();
+    return entry;
   }
 
   delete(sessionId) {

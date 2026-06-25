@@ -85,12 +85,24 @@ export class BetAgent {
     };
   }
 
+  appendTrace(trace, event) {
+    if (typeof trace !== 'function') {
+      return;
+    }
+    trace({
+      ...event,
+      agent: 'bet',
+      timestamp: new Date().toISOString()
+    });
+  }
+
   async search(slots, options = {}) {
     const {
       now = null,
       topN = DEFAULT_TOP_N,
       routeConcurrency = DEFAULT_ROUTE_CONCURRENCY,
-      routeCandidateLimit = DEFAULT_ROUTE_CANDIDATE_LIMIT
+      routeCandidateLimit = DEFAULT_ROUTE_CANDIDATE_LIMIT,
+      trace = null
     } = options;
     const { mode, transportMode, location, totalTimeMinutes } = slots;
     const searchRadius = getSearchRadius(mode, transportMode);
@@ -137,6 +149,16 @@ export class BetAgent {
       requestedTopN: normalizedTopN,
       routeConcurrency: normalizedRouteConcurrency
     });
+    this.appendTrace(trace, {
+      event: 'bet_search_started',
+      phase: 'start',
+      mode,
+      transportMode,
+      searchRadiusMeters: searchRadius,
+      requestedTopN: normalizedTopN,
+      routeConcurrency: normalizedRouteConcurrency,
+      routeCandidateLimit: normalizedRouteCandidateLimit
+    });
 
     let nearbyCandidates;
     try {
@@ -154,12 +176,17 @@ export class BetAgent {
           searchRadiusMeters: searchRadius
         }
       );
+      this.appendTrace(trace, {
+        event: 'bet_candidates_failed',
+        phase: 'provider_query',
+        message: error.message
+      });
 
       return createErrorResult(
         isProviderQuotaError(error)
           ? ErrorCodes.PROVIDER_QUOTA
           : ErrorCodes.PROVIDER_ERROR,
-        '식당 검색에 실패했습니다.',
+        '?앸떦 寃?됱뿉 ?ㅽ뙣?덉뒿?덈떎.',
         metadata
       );
     }
@@ -182,11 +209,17 @@ export class BetAgent {
       agent: 'bet',
       ...searchMetadata
     });
+    this.appendTrace(trace, {
+      event: 'bet_candidates_fetched',
+      phase: 'candidate_search',
+      rawCandidateCount: searchMetadata.rawCandidateCount,
+      candidateCountForRouting: searchMetadata.candidateCountForRouting
+    });
 
     if (candidatesForRouting.length === 0) {
       return createErrorResult(
         ErrorCodes.NO_RESULTS,
-        '조건에 맞는 식당을 찾지 못했습니다.',
+        '議곌굔??留욌뒗 ?앸떦??李얠? 紐삵뻽?듬땲??',
         searchMetadata
       );
     }
@@ -206,7 +239,14 @@ export class BetAgent {
         logAgentHop(this.dependencies.logger, {
           fromAgent: 'bet',
           toAgent:
-            transportMode === 'walk' ? 'kakao-mobility' : 'naver-directions',
+            transportMode === 'walk' ? 'walking-route' : 'naver-directions',
+          phase: 'route_lookup',
+          candidateId: candidate.id,
+          candidateName: candidate.name,
+          transportMode
+        });
+        this.appendTrace(trace, {
+          event: 'bet_route_lookup_started',
           phase: 'route_lookup',
           candidateId: candidate.id,
           candidateName: candidate.name,
@@ -220,6 +260,11 @@ export class BetAgent {
             candidate.location.lat,
             candidate.location.lng
           );
+          this.appendTrace(trace, {
+            event: 'bet_route_lookup_success',
+            phase: 'route_lookup',
+            candidateId: candidate.id
+          });
 
           return this.dependencies.mergeCandidateWithRoute(
             candidate,
@@ -231,6 +276,13 @@ export class BetAgent {
           this.dependencies.logger.error('Bet route lookup failed', error, {
             event: 'bet_route_lookup_failed',
             agent: 'bet',
+            candidateId: candidate.id,
+            candidateName: candidate.name,
+            transportMode
+          });
+          this.appendTrace(trace, {
+            event: 'bet_route_lookup_failed',
+            phase: 'route_lookup',
             candidateId: candidate.id,
             candidateName: candidate.name,
             transportMode
@@ -257,11 +309,17 @@ export class BetAgent {
       agent: 'bet',
       ...routeMetadata
     });
+    this.appendTrace(trace, {
+      event: 'bet_route_fanout_completed',
+      phase: 'route_lookup',
+      routedCandidateCount: routeMetadata.routedCandidateCount,
+      routeFailureCount
+    });
 
     if (routedCandidates.length === 0) {
       return createErrorResult(
         ErrorCodes.ROUTE_UNAVAILABLE,
-        '경로 탐색에 실패했습니다.',
+        '寃쎈줈 ?먯깋???ㅽ뙣?덉뒿?덈떎.',
         routeMetadata
       );
     }
@@ -292,7 +350,7 @@ export class BetAgent {
     if (rankedCandidates.length === 0) {
       return createErrorResult(
         ErrorCodes.NO_RESULTS,
-        '조건에 맞는 식당을 찾지 못했습니다.',
+        '議곌굔??留욌뒗 ?앸떦??李얠? 紐삵뻽?듬땲??',
         routeMetadata
       );
     }
@@ -303,6 +361,20 @@ export class BetAgent {
       ...routeMetadata,
       eligibleCount: rankedCandidates.length
     });
+    this.appendTrace(trace, {
+      event: 'bet_ranking_completed',
+      phase: 'ranking',
+      candidateCount: routedCandidates.length,
+      eligibleCount: rankedCandidates.length,
+      topIds: rankedCandidates.slice(0, normalizedTopN).map((item) => item.id),
+      topScoreBreakdowns: rankedCandidates
+        .slice(0, normalizedTopN)
+        .map((item) => ({
+          id: item.id,
+          scoreTotal: item.scoreTotal,
+          scoreBreakdown: item.scoreBreakdown
+        }))
+    });
 
     return {
       status: 'results',
@@ -310,7 +382,17 @@ export class BetAgent {
       results: rankedCandidates,
       metadata: {
         ...routeMetadata,
-        eligibleCount: rankedCandidates.length
+        eligibleCount: rankedCandidates.length,
+        decisionEvidence: {
+          rawCandidateCount: routeMetadata.rawCandidateCount,
+          candidateWindowLimit,
+          routedCandidateCount: routeMetadata.routedCandidateCount,
+          routeFailureCount: routeMetadata.routeFailureCount,
+          topN: normalizedTopN,
+          topCandidateIds: rankedCandidates
+            .slice(0, normalizedTopN)
+            .map((candidate) => candidate.id)
+        }
       }
     };
   }

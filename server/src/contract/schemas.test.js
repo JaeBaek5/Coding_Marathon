@@ -189,6 +189,21 @@ describe('Domain Contracts & Schemas Validation', () => {
     });
   });
 
+  it('should accept prompt as an alias for query', () => {
+    const result = RecommendationRequestSchema.safeParse({
+      prompt: 'Recommend lunch nearby',
+      mode: 'normal',
+      location: {
+        lat: 37.5665,
+        lng: 126.978,
+        source: 'browser-geolocation'
+      }
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data.query).toBe('Recommend lunch nearby');
+  });
+
   it('should successfully validate the invalid-time fixture', async () => {
     const fixture = await loadFixture('invalid-time.json');
     const result = RecommendationResponseSchema.safeParse(fixture);
@@ -290,13 +305,13 @@ describe('Domain Contracts & Schemas Validation', () => {
           category: '한식',
           address: '서울특별시 강남구 역삼동 123-45',
           location: { lat: 37.4981, lng: 127.0282 },
-          placeUrl: 'https://place.map.kakao.com/123',
+          placeUrl: 'https://m.place.naver.com/restaurant/123/review/visitor',
           transportMode: 'walk',
           oneWayRouteMinutes: 5,
           totalExpectedMinutes: 40,
           distanceMeters: 400,
           confidenceBadge: 'high',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           openStatus: null,
           scoreBreakdown: {
             total: 96,

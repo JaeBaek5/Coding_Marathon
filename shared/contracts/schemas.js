@@ -118,7 +118,7 @@ export const SlotSchema = z.object({
   ageGroup: z.string().optional().nullable()
 });
 
-export const RecommendationRequestSchema = z.object({
+const RecommendationRequestBaseSchema = z.object({
   query: z.string().min(1, 'Query is required'),
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]).default(Mode.NORMAL),
   location: LocationPayloadSchema.optional().nullable(),
@@ -129,6 +129,19 @@ export const RecommendationRequestSchema = z.object({
     .nullable(),
   now: z.string().datetime({ offset: true }).optional().nullable()
 });
+
+export const RecommendationRequestSchema = z.preprocess((value) => {
+  if (
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof value.prompt === 'string' &&
+    value.query === undefined
+  ) {
+    return { ...value, query: value.prompt };
+  }
+  return value;
+}, RecommendationRequestBaseSchema);
 
 export const AnswersRequestSchema = z.object({
   answers: z.record(z.any())
@@ -323,7 +336,7 @@ export const GimelReasonOutputSchema = z.object({
 
 export const ReviewExtractionOutputSchema = z
   .object({
-    provider: z.enum(['naver', 'kakao']).nullable(),
+    provider: z.enum(['naver']).nullable(),
     placeUrl: z.string().url().nullable(),
     placeId: z.string().nullable(),
     rating: z.number().min(0).max(5).nullable(),

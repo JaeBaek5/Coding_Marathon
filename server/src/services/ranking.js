@@ -60,19 +60,6 @@ const ContextKeywords = {
   }
 };
 
-const CAFE_CATEGORIES = ['카페', '커피숍', '디저트카페', '테이크아웃커피'];
-const BAR_CATEGORIES = ['술집', '호프', '호프/요리주점', '요리주점', '와인바', '칵테일바', '펍'];
-
-function isCafeCategory(category) {
-  const lower = (category || '').toLowerCase();
-  return CAFE_CATEGORIES.some((c) => lower.includes(c.toLowerCase()));
-}
-
-function isBarCategory(category) {
-  const lower = (category || '').toLowerCase();
-  return BAR_CATEGORIES.some((b) => lower.includes(b.toLowerCase()));
-}
-
 const VibeKeywords = {
   casual: ['캐주얼', '편안한', '분식', '김밥', '포차', '가성비', '가벼운'],
   조용한: ['조용한', '룸', '고급', '정식', '찻집', '분위기', '프라이빗'],
@@ -253,14 +240,6 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
     }
 
     // Hard filter: Venue-type gating — decision is driven by Aleph's structured venuePreference slot
-    const venuePreference = slot.venuePreference ?? 'restaurant';
-    if (isCafeCategory(candidate.category) && venuePreference !== 'cafe' && venuePreference !== 'any') {
-      continue;
-    }
-    if (isBarCategory(candidate.category) && venuePreference !== 'bar' && venuePreference !== 'any') {
-      continue;
-    }
-
     // Hard filter: Opening hours window check
     if (
       candidate.openingHours !== null &&

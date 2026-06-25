@@ -101,7 +101,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -116,7 +116,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -131,7 +131,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -147,7 +147,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         }
       ],
@@ -171,7 +171,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -182,7 +182,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         },
         {
@@ -193,7 +193,7 @@ describe('Bet Agent Unit', () => {
           transportMode: 'walk',
           confidenceBadge: 'high',
           reason: '',
-          providerAttribution: 'Kakao Local / Kakao Mobility',
+          providerAttribution: 'Naver Local Search / Walk estimate',
           path: []
         }
       ],
@@ -218,7 +218,7 @@ describe('Bet Agent Unit', () => {
       transportMode: 'walk',
       confidenceBadge: 'high',
       reason: '',
-      providerAttribution: 'Kakao Local / Kakao Mobility',
+      providerAttribution: 'Naver Local Search / Walk estimate',
       path: []
     }));
 
