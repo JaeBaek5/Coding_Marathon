@@ -80,7 +80,17 @@ export function isVenueAllowed(candidate, slot = {}) {
     return true;
   }
 
+  const venuePreference = slot?.venuePreference || 'restaurant';
+
   if (slot.venueIntentExplicit === true) {
+    return true;
+  }
+
+  if (venueType === 'cafe' && (venuePreference === 'cafe' || venuePreference === 'any')) {
+    return true;
+  }
+
+  if (venueType === 'bar' && (venuePreference === 'bar' || venuePreference === 'any')) {
     return true;
   }
 

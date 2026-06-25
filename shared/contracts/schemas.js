@@ -134,6 +134,11 @@ export const AnswersRequestSchema = z.object({
   answers: z.record(z.any())
 });
 
+export const FeedbackRequestSchema = z.object({
+  action: z.enum(['like', 'dislike']),
+  candidateId: z.string().min(1)
+});
+
 export const NormalizedRouteSchema = z.object({
   durationMinutes: z.number().int().nonnegative(),
   distanceMeters: z.number().int().nonnegative(),
