@@ -56,6 +56,23 @@ export function createApiRouter(options = {}) {
     res.status(200).json(getPublicConfig());
   });
 
+  router.get('/api/sessions/:sessionId/logs', (req, res) => {
+    const session = sessionStore.get(req.params.sessionId);
+    if (!session) {
+      return res.status(410).json({
+        status: 'error',
+        code: ErrorCodes.SESSION_EXPIRED,
+        message: 'Session expired or not found.',
+        missingFields: []
+      });
+    }
+
+    return res.status(200).json({
+      sessionId: session.id,
+      agentCommunicationLog: session.agentCommunicationLog || []
+    });
+  });
+
   router.get('/api/location-search', async (req, res) => {
     const q = req.query.q;
     if (!q) {

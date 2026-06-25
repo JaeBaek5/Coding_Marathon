@@ -94,3 +94,12 @@ describe('mumuk shadcn design contract', () => {
     expect(errorCard).toContain('서비스 일시 장애');
   });
 });
+
+it('renders loading progress as centered sweep text without a visible spinner', () => {
+  const app = readProjectFile('client/src/App.svelte');
+
+  expect(app).toContain('workflow-status-text');
+  expect(app).toContain('@keyframes workflow-sweep');
+  expect(app).not.toContain('workflow-spinner');
+  expect(cssBlock(app, '.workflow-banner')).toContain('justify-content: center');
+});

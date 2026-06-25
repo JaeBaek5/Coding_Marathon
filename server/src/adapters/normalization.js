@@ -30,6 +30,10 @@ export function normalizeNaverLocalItem(item) {
     rating: null,
     reviewCount: null,
     reviewSummary: null,
+    mainPhoto: null,
+    menuBoardPhoto: null,
+    reviewPhotos: [],
+    menuItems: [],
     openStatus: null
   };
 }

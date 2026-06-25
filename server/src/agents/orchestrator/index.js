@@ -17,6 +17,13 @@ function randomSessionId() {
   return `${SESSION_ID_PREFIX}${Math.random().toString(36).slice(2, 11)}`;
 }
 
+function isValidClientSessionId(sessionId) {
+  return (
+    typeof sessionId === 'string' &&
+    /^ses_[a-z0-9_-]{6,64}$/i.test(sessionId)
+  );
+}
+
 function normalizeLocationPayload(payload, defaultSource) {
   if (!payload) return null;
   const coords = payload.coords && typeof payload.coords === 'object' ? payload.coords : payload;
@@ -140,8 +147,12 @@ export class OrchestratorAgent {
     }));
   }
 
-  createSession(initialSlots = {}) {
-    const sessionId = randomSessionId();
+  createSession(initialSlots = {}, preferredSessionId = null) {
+    const sessionId =
+      isValidClientSessionId(preferredSessionId) &&
+      !this.dependencies.sessions.get(preferredSessionId)
+        ? preferredSessionId
+        : randomSessionId();
     return this.dependencies.sessions.create(sessionId, initialSlots);
   }
 
@@ -232,7 +243,11 @@ export class OrchestratorAgent {
     });
 
     const reasonedCandidates = await this.dependencies.gimel.generateReasons(
-      betResult.results
+      betResult.results,
+      {
+        trace: (entry) =>
+          this.appendAgentLog(session, { event: 'gimel_trace', ...entry })
+      }
     );
     this.appendAgentLog(session, {
       event: 'gimel_reasons',
@@ -278,7 +293,7 @@ export class OrchestratorAgent {
   }
 
   async processRequest(requestPayload) {
-    const session = this.createSession({});
+    const session = this.createSession({}, requestPayload.clientSessionId);
     const mode = requestPayload.mode || 'normal';
     const location = this.normalizeStructuredLocation(requestPayload);
     const locationError = this.validateLocation(mode, location);

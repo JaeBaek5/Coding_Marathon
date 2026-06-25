@@ -1,11 +1,10 @@
 <script>
-  const { session } = $props();
   import AgentCommunicationPanel from './AgentCommunicationPanel.svelte';
 
+  const { session } = $props();
+
   function formatDistance(distanceMeters) {
-    if (!distanceMeters || typeof distanceMeters !== 'number') {
-      return null;
-    }
+    if (!distanceMeters || typeof distanceMeters !== 'number') return null;
     return `${(distanceMeters / 1000).toFixed(1)}km`;
   }
 
@@ -37,8 +36,8 @@
     <h2 class="title">추천 식당</h2>
     <p class="subtitle">
       {session.results.length === 1
-        ? '조건에 맞는 식당 1곳을 우선 확인합니다.'
-        : `${session.results.length}곳의 후보를 표시합니다.`}
+        ? '조건에 맞는 식당 1곳을 먼저 추천합니다.'
+        : `${session.results.length}곳의 후보를 한 번에 보여드립니다.`}
     </p>
   </div>
 
@@ -71,7 +70,7 @@
             <span class="value">{item.oneWayRouteMinutes}분</span>
           </div>
           <div class="info-itemhighlighted">
-            <span class="label">총 예상시간</span>
+            <span class="label">총 예상 시간</span>
             <span class="value">{item.totalExpectedMinutes}분</span>
           </div>
           {#if formatDistance(item.distanceMeters)}
@@ -83,13 +82,8 @@
         </div>
 
         {#if item.placeUrl}
-          <a
-            class="place-link"
-            href={item.placeUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            상세 보기
+          <a class="place-link" href={item.placeUrl} target="_blank" rel="noreferrer">
+            네이버에서 보기
           </a>
         {/if}
 
@@ -113,9 +107,9 @@
           </div>
         {/if}
 
-        {#if item.mainPhoto || item.menuBoardPhoto || (item.menuItems?.length || 0) > 0}
+        {#if item.mainPhoto || item.menuBoardPhoto || (item.menuItems?.length || 0) > 0 || (item.reviewPhotos?.length || 0) > 0}
           <div class="media-section">
-            <div class="card-section-title">지도/메뉴</div>
+            <div class="card-section-title">사진과 메뉴</div>
 
             {#if item.mainPhoto}
               <img
@@ -125,11 +119,12 @@
                 loading="lazy"
               />
             {/if}
+
             {#if item.menuBoardPhoto}
               <img
                 class="media-thumb"
                 src={item.menuBoardPhoto}
-                alt={`${item.name} 메뉴판 사진`}
+                alt={`${item.name} 메뉴판`}
                 loading="lazy"
               />
             {/if}
@@ -146,6 +141,19 @@
                 {/each}
               </ul>
             {/if}
+
+            {#if item.reviewPhotos?.length}
+              <div class="review-photos">
+                {#each item.reviewPhotos as photo}
+                  <img
+                    class="media-thumb"
+                    src={photo}
+                    alt={`${item.name} 리뷰 사진`}
+                    loading="lazy"
+                  />
+                {/each}
+              </div>
+            {/if}
           </div>
         {/if}
 
@@ -153,7 +161,7 @@
           <div class="badges-row">
             {#if item.confidenceBadge}
               <span class="badge-tag confidence-{item.confidenceBadge}">
-                신뢰도:
+                신뢰도
                 {item.confidenceBadge === 'high'
                   ? '높음'
                   : item.confidenceBadge === 'medium'
@@ -363,9 +371,6 @@
     align-items: baseline;
     gap: var(--spacing-xs);
     color: var(--color-charcoal);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     font-size: 13px;
     line-height: 1.4;
     margin: 0;
@@ -387,8 +392,21 @@
   .media-thumb {
     width: 100%;
     max-width: 360px;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
     border-radius: var(--rounded-sm);
     border: 1px solid var(--color-hairline);
+  }
+
+  .review-photos {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-xs);
+    max-width: 360px;
+  }
+
+  .review-photos .media-thumb {
+    aspect-ratio: 1;
   }
 
   .menu-list {

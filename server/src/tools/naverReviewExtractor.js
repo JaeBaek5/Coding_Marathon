@@ -3,6 +3,8 @@ import { ReviewExtractionOutputSchema } from '../../../shared/contracts/schemas.
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
+const MAX_REVIEW_PHOTOS = 6;
+
 const BIZ_PATHS = [
   'restaurant',
   'place',
@@ -125,6 +127,57 @@ export function extractReviewsFromState(state) {
   return reviews;
 }
 
+function extractReviewPhotosFromState(state) {
+  if (!state || typeof state !== 'object') return [];
+
+  const photos = [];
+  function collectPhotoUrls(value) {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) collectPhotoUrls(item);
+      return;
+    }
+
+    for (const key of [
+      'origin',
+      'url',
+      'imageUrl',
+      'photoUrl',
+      'imgUrl',
+      'thumbnail',
+      'thumbnailUrl'
+    ]) {
+      const itemUrl = value[key];
+      if (typeof itemUrl === 'string' && itemUrl.startsWith('http')) {
+        photos.push(itemUrl);
+      }
+    }
+
+    for (const key of [
+      'photo',
+      'image',
+      'media',
+      'images',
+      'imageList',
+      'photoList',
+      'photos',
+      'attachImageList',
+      'reviewPhotos'
+    ]) {
+      collectPhotoUrls(value[key]);
+    }
+  }
+
+  for (const v of Object.values(state)) {
+    if (!v || typeof v !== 'object') continue;
+    if (typeof v.__typename === 'string' && !v.__typename.includes('Review')) continue;
+
+    collectPhotoUrls(v);
+  }
+
+  return Array.from(new Set(photos)).slice(0, MAX_REVIEW_PHOTOS);
+}
+
 // Extract home enrichment data (photos + registered menu items) from Apollo state.
 export function extractEnrichmentFromState(state, storeName = '') {
   const empty = {
@@ -146,10 +199,14 @@ export function extractEnrichmentFromState(state, storeName = '') {
   const menuBoardPhotoObj = photos.find((p) =>
     menuBoardTitles.includes(p.title)
   );
-  const mainPhotoObj = photos.find(
-    (p) =>
-      storeTitles.some((t) => p.title === t) || p.type === 'business'
-  );
+  const mainPhotoObj = photos.find((p) => {
+    const title = p.title ?? '';
+    return (
+      storeTitles.includes(title) ||
+      p.type === 'business' ||
+      p.category === '대표'
+    );
+  });
   const foodPhotos = photos
     .filter(
       (p) =>
@@ -237,6 +294,125 @@ function summarizeCons(reviews) {
   return null;
 }
 
+const POSITIVE_REVIEW_KEYWORDS = [
+  '맛있',
+  '친절',
+  '깔끔',
+  '추천',
+  '최고',
+  '재방문',
+  '좋',
+  '신선',
+  '빠르',
+  '조용',
+  '편하',
+  '든든',
+  '만족'
+];
+
+const NEGATIVE_REVIEW_KEYWORDS = [
+  '아쉬',
+  '아쉬운점',
+  '불편',
+  '별로',
+  '비싸',
+  '느리',
+  '시끄',
+  '주차',
+  '불친절',
+  '맛없',
+  '최악',
+  '실망',
+  '다시는',
+  '비추',
+  '재방문은 안',
+  '재방문 안',
+  '부담',
+  '어려웠',
+  '밍밍',
+  '적어서',
+  '늦게'
+];
+
+const CONTRAST_CONNECTORS = ['지만', '하지만', '그런데', '다만', '입니다만', '으나'];
+
+function firstReviewSentence(body) {
+  return body.split(/[.!?\n]/)[0].trim();
+}
+
+function reviewContainsAny(text, keywords) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+export function isNegativeReview(review) {
+  const body = typeof review === 'string' ? review : review?.body;
+  if (!body) return false;
+  const normalized = body.trim();
+  return reviewContainsAny(normalized, NEGATIVE_REVIEW_KEYWORDS);
+}
+
+function isPositiveReview(review) {
+  const body = typeof review === 'string' ? review : review?.body;
+  if (!body || isNegativeReview(body)) return false;
+  return reviewContainsAny(body, POSITIVE_REVIEW_KEYWORDS);
+}
+
+function summarizePositiveReviews(reviews) {
+  const positiveReviews = reviews.filter(isPositiveReview);
+  for (const kw of POSITIVE_REVIEW_KEYWORDS) {
+    const match = positiveReviews.find((r) => r.body.includes(kw));
+    if (match) {
+      const sentence = firstReviewSentence(match.body);
+      if (sentence.length >= 10) return sentence.slice(0, 100);
+    }
+  }
+  const first = positiveReviews[0] ? firstReviewSentence(positiveReviews[0].body) : null;
+  if (first && first.length >= 10) return first.slice(0, 100);
+  return summarizePros(positiveReviews);
+}
+
+function summarizeNegativeReviews(reviews) {
+  for (const kw of NEGATIVE_REVIEW_KEYWORDS) {
+    const match = reviews.find((r) => r.body.includes(kw));
+    if (match) {
+      const sentence = firstReviewSentence(match.body);
+      if (sentence.length >= 8) return sentence.slice(0, 100);
+    }
+  }
+  return summarizeCons(reviews);
+}
+
+function hasNegativeContrast(review) {
+  const body = typeof review === 'string' ? review : review?.body;
+  if (!body) return false;
+  for (const connector of CONTRAST_CONNECTORS) {
+    const index = body.indexOf(connector);
+    if (index === -1) continue;
+    const afterConnector = body.slice(index + connector.length);
+    if (reviewContainsAny(afterConnector, NEGATIVE_REVIEW_KEYWORDS)) return true;
+  }
+  return false;
+}
+
+function shouldExcludeByReviewSentiment({
+  reviews,
+  pros,
+  cons,
+  negativeReviewCount,
+  positiveReviewCount
+}) {
+  if (!reviews.length) return false;
+  if (pros && cons && pros === cons) return true;
+  if (pros && isNegativeReview(pros)) return true;
+  if (reviews.some(hasNegativeContrast) && negativeReviewCount >= positiveReviewCount) {
+    return true;
+  }
+  if (reviews.length >= 5 && negativeReviewCount >= 3 && negativeReviewCount >= positiveReviewCount) {
+    return true;
+  }
+  return reviews.length >= 10 && negativeReviewCount > positiveReviewCount;
+}
+
 async function fetchReviewPage(placeId, { fetchFn = fetch } = {}) {
   const headers = {
     'User-Agent': MOBILE_UA,
@@ -280,6 +456,9 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
       reviews: [],
       reviewSummary: { pros: null, cons: null },
       reviewSnippets: [],
+      negativeReviewCount: 0,
+      positiveReviewCount: 0,
+      shouldExcludeFromRecommendation: false,
       extractionMethod: 'unavailable',
       fetchedAt,
       error: 'Could not resolve Naver place ID'
@@ -300,6 +479,9 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
       reviews: [],
       reviewSummary: { pros: null, cons: null },
       reviewSnippets: [],
+      negativeReviewCount: 0,
+      positiveReviewCount: 0,
+      shouldExcludeFromRecommendation: false,
       extractionMethod: 'unavailable',
       fetchedAt,
       error: 'Could not fetch review page'
@@ -308,10 +490,20 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
 
   const state = parseApolloState(page.text);
   const allReviews = extractReviewsFromState(state);
+  const reviewPhotos = extractReviewPhotosFromState(state);
   const reviews = allReviews.slice(0, 20);
   const reviewSnippets = reviews.slice(0, 5).map((r) => r.body.slice(0, 140));
-  const pros = reviews.length > 0 ? summarizePros(reviews) : null;
-  const cons = reviews.length > 0 ? summarizeCons(reviews) : null;
+  const pros = reviews.length > 0 ? summarizePositiveReviews(reviews) : null;
+  const cons = reviews.length > 0 ? summarizeNegativeReviews(reviews) : null;
+  const negativeReviewCount = reviews.filter(isNegativeReview).length;
+  const positiveReviewCount = reviews.filter(isPositiveReview).length;
+  const shouldExcludeFromRecommendation = shouldExcludeByReviewSentiment({
+    reviews,
+    pros,
+    cons,
+    negativeReviewCount,
+    positiveReviewCount
+  });
   const rating = extractRatingFromState(state);
 
   return ReviewExtractionOutputSchema.parse({
@@ -323,6 +515,10 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
     reviews,
     reviewSummary: { pros, cons },
     reviewSnippets,
+    reviewPhotos,
+    negativeReviewCount,
+    positiveReviewCount,
+    shouldExcludeFromRecommendation,
     extractionMethod: 'static-hydration',
     fetchedAt,
     error: null

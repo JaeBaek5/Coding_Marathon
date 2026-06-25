@@ -2,7 +2,10 @@ import { NaverLocalAdapter } from './naverLocalAdapter.js';
 import { NaverDirectionsAdapter } from './naverDirectionsAdapter.js';
 import { cache, cacheTTLs } from '../utils/cache.js';
 import { deduplicateCandidates } from '../utils/dedupe.js';
-import { estimateWalkingRoute, estimateDrivingRoute } from '../utils/haversine.js';
+import {
+  estimateWalkingRoute,
+  estimateDrivingRoute
+} from '../utils/haversine.js';
 import {
   normalizeNaverLocalItem,
   normalizeNaverKeywordLocation,
@@ -14,10 +17,20 @@ import {
 const naverLocal = new NaverLocalAdapter();
 const naverDirections = new NaverDirectionsAdapter();
 
-export async function searchNearbyCandidates(lat, lng, radius = 1000) {
-  const key = `nearby:${lat}:${lng}:${radius}`;
+export async function searchNearbyCandidates(
+  lat,
+  lng,
+  radius = 1000,
+  slots = {}
+) {
+  const key = `nearby:${lat}:${lng}:${radius}:${JSON.stringify(slots)}`;
   return cache.wrap(key, cacheTTLs.NEARBY, async () => {
-    const raw = await naverLocal.searchNearbyRestaurants(lat, lng, radius);
+    const raw = await naverLocal.searchNearbyRestaurants(
+      lat,
+      lng,
+      radius,
+      slots
+    );
     const normalized = raw.map(normalizeNaverLocalItem);
     return deduplicateCandidates(normalized);
   });

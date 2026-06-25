@@ -120,6 +120,11 @@ export const SlotSchema = z.object({
 
 const RecommendationRequestBaseSchema = z.object({
   query: z.string().min(1, 'Query is required'),
+  clientSessionId: z
+    .string()
+    .regex(/^ses_[a-z0-9_-]{6,64}$/i)
+    .optional()
+    .nullable(),
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]).default(Mode.NORMAL),
   location: LocationPayloadSchema.optional().nullable(),
   userLocation: CoordinateSchema.optional().nullable(),
@@ -168,9 +173,28 @@ export const NormalizedCandidateSchema = z.object({
 
   priceLevel: z.null().default(null),
   openingHours: z.null().default(null),
-  rating: z.null().default(null),
-  reviewCount: z.null().default(null),
-  reviewSummary: z.null().default(null),
+  rating: z.number().min(0).max(5).nullable().default(null),
+  reviewCount: z.number().int().nonnegative().nullable().default(null),
+  reviewSummary: z
+    .object({
+      pros: z.string().nullable(),
+      cons: z.string().nullable()
+    })
+    .nullable()
+    .default(null),
+  mainPhoto: z.string().url().nullable().default(null),
+  menuBoardPhoto: z.string().url().nullable().default(null),
+  reviewPhotos: z.array(z.string().url()).default([]),
+  menuItems: z
+    .array(
+      z.object({
+        name: z.string(),
+        price: z
+          .union([z.string(), z.number().nullable(), z.number(), z.null()])
+          .transform((value) => (value == null ? null : String(value)))
+      })
+    )
+    .default([]),
 
   transportMode: z.enum([TransportMode.WALK, TransportMode.DRIVE]),
   oneWayRouteMinutes: z.number().int().nonnegative(),
@@ -212,12 +236,34 @@ export const BetCandidateSchema = z
     confidenceBadge: z.enum(['high', 'medium', 'low']),
     providerAttribution: z.string(),
     openStatus: z.boolean().nullable().default(null),
+    rating: z.number().min(0).max(5).nullable().default(null),
+    reviewCount: z.number().int().nonnegative().nullable().default(null),
+    reviewSummary: z
+      .object({
+        pros: z.string().nullable(),
+        cons: z.string().nullable()
+      })
+      .nullable()
+      .default(null),
     scoreBreakdown: z
       .object({
         total: z.number(),
         components: z.record(z.string(), z.number())
       })
-      .strict()
+      .strict(),
+    mainPhoto: z.string().url().nullable().default(null),
+    menuBoardPhoto: z.string().url().nullable().default(null),
+    reviewPhotos: z.array(z.string().url()).default([]),
+    menuItems: z
+      .array(
+        z.object({
+          name: z.string(),
+          price: z
+            .union([z.string(), z.number().nullable(), z.number(), z.null()])
+            .transform((value) => (value == null ? null : String(value)))
+        })
+      )
+      .default([])
   })
   .strict();
 
@@ -358,6 +404,22 @@ export const ReviewExtractionOutputSchema = z
       })
       .strict(),
     reviewSnippets: z.array(z.string()),
+    reviewPhotos: z.array(z.string().url()).default([]),
+    mainPhoto: z.string().url().nullable().default(null),
+    menuBoardPhoto: z.string().url().nullable().default(null),
+    menuItems: z
+      .array(
+        z.object({
+          name: z.string(),
+          price: z
+            .union([z.string(), z.number().nullable(), z.number(), z.null()])
+            .transform((value) => (value == null ? null : String(value)))
+        })
+      )
+      .default([]),
+    negativeReviewCount: z.number().int().nonnegative().default(0),
+    positiveReviewCount: z.number().int().nonnegative().default(0),
+    shouldExcludeFromRecommendation: z.boolean().default(false),
     extractionMethod: z.enum(['browser', 'static-hydration', 'unavailable']),
     fetchedAt: z.string().datetime({ offset: true }),
     error: z.string().nullable()

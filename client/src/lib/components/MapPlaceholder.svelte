@@ -357,6 +357,29 @@
   });
 
   $effect(() => {
+    if (session.loading) {
+      for (const marker of resultMarkers) {
+        marker.setMap(null);
+      }
+      resultMarkers = [];
+      if (activePolyline) {
+        activePolyline.setMap(null);
+        activePolyline = null;
+      }
+      if (activeInfoWindow) {
+        activeInfoWindow.close();
+        activeInfoWindow = null;
+      }
+      return;
+    }
+
+    if (mapInitialized) {
+      renderResultMarkers();
+      renderActiveRoute();
+    }
+  });
+
+  $effect(() => {
     const origin = getOriginCoords();
     if (mapContainerEl && !mapInitialized && !loadError && origin) {
       resetMapState();

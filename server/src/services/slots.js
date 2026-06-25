@@ -70,102 +70,62 @@ export function detectMissingFields(slots = {}) {
 
 export function parseQueryToSlotsRegex(query) {
   const slots = {};
+  const normalizedQuery = normalizeForRegex(query);
 
-  if (!query) return slots;
+  if (!normalizedQuery) {
+    return slots;
+  }
 
-  if (
-    query.includes('출장') ||
-    query.includes('여행') ||
-    query.includes('travel')
-  ) {
+  if (matchesAny(normalizedQuery, ['출장', '여행', 'travel'])) {
     slots.mode = 'travel';
   } else if (
-    query.includes('일반') ||
-    query.includes('normal') ||
-    query.includes('현재 위치')
+    matchesAny(normalizedQuery, ['일반', 'normal', '현재 위치'])
   ) {
     slots.mode = 'normal';
   }
 
-  if (
-    query.includes('아침') ||
-    query.includes('조식') ||
-    query.includes('breakfast') ||
-    query.includes('오전')
-  ) {
+  if (matchesAny(normalizedQuery, ['아침', '조식', 'breakfast', '오전'])) {
     slots.mealPeriod = 'breakfast';
-  } else if (
-    query.includes('점심') ||
-    query.includes('중식') ||
-    query.includes('lunch') ||
-    query.includes('낮')
-  ) {
+  } else if (matchesAny(normalizedQuery, ['점심', '중식', 'lunch', '낮'])) {
     slots.mealPeriod = 'lunch';
-  } else if (
-    query.includes('저녁') ||
-    query.includes('석식') ||
-    query.includes('dinner') ||
-    query.includes('밤')
-  ) {
+  } else if (matchesAny(normalizedQuery, ['저녁', '석식', 'dinner', '밤'])) {
     slots.mealPeriod = 'dinner';
-  } else if (
-    query.includes('야식') ||
-    query.includes('late_night') ||
-    query.includes('새벽') ||
-    query.includes('늦은 밤')
-  ) {
+  } else if (matchesAny(normalizedQuery, ['야식', 'late_night', '새벽', '늦은 밤'])) {
     slots.mealPeriod = 'late_night';
   }
 
-  const budgetMatch = query.match(/(\d+)\s*만\s*원?/);
+  const budgetMatch = normalizedQuery.match(/(\d+)\s*만\s*원?/);
   if (budgetMatch) {
     slots.budgetPerPersonKrw = parseInt(budgetMatch[1], 10) * 10000;
   } else {
-    const budgetRawMatch = query.match(/(\d{4,})\s*원?/);
+    const budgetRawMatch = normalizedQuery.match(/(\d{4,})\s*원?/);
     if (budgetRawMatch) {
       slots.budgetPerPersonKrw = parseInt(budgetRawMatch[1], 10);
     }
   }
 
-  const hourMatch = query.match(/(\d+)\s*시간/);
+  const hourMatch = normalizedQuery.match(/(\d+)\s*시간/);
   if (hourMatch) {
     slots.totalTimeMinutes = parseInt(hourMatch[1], 10) * 60;
   } else {
-    const minMatch = query.match(/(\d+)\s*분/);
+    const minMatch = normalizedQuery.match(/(\d+)\s*분/);
     if (minMatch) {
       slots.totalTimeMinutes = parseInt(minMatch[1], 10);
     }
   }
 
-  if (
-    query.includes('도보') ||
-    query.includes('걸어서') ||
-    query.includes('뚜벅이') ||
-    query.includes('도보로') ||
-    query.includes('걸음')
-  ) {
+  if (matchesAny(normalizedQuery, ['도보', '걸어서', '뚜벅이', '도보로', '걸음'])) {
     slots.transportMode = 'walk';
-  } else if (
-    query.includes('차로') ||
-    query.includes('운전') ||
-    query.includes('자동차') ||
-    query.includes('드라이브') ||
-    query.includes('차량') ||
-    query.includes('차 ')
-  ) {
+  } else if (matchesAny(normalizedQuery, ['차로', '운전', '자동차', '드라이브', '차량', '차'])) {
     slots.transportMode = 'drive';
   }
 
-  const excludedMatch = query.match(
+  const excludedMatch = normalizedQuery.match(
     /([^\s,]+)\s*(제외|빼고|피하고|안 먹|못 먹)/
   );
   if (excludedMatch) {
     slots.excludedFoods = [excludedMatch[1]];
-  } else if (
-    query.includes('없음') ||
-    query.includes('없어') ||
-    query.includes('다 잘먹')
-  ) {
+  } else if (matchesAny(normalizedQuery, ['없음', '없어', '다 잘먹'])) {
     slots.excludedFoods = [];
   }
 
@@ -175,13 +135,16 @@ export function parseQueryToSlotsRegex(query) {
     '아이',
     '친구',
     '연인',
+    '혼자',
+    '혼자서',
+    '혼술',
     '혼밥',
     '가족',
     '동료',
     '직원'
   ];
   for (const partyContext of partyList) {
-    if (query.includes(partyContext)) {
+    if (matchesAny(normalizedQuery, [partyContext])) {
       slots.partyContext = partyContext;
       break;
     }
@@ -198,11 +161,38 @@ export function parseQueryToSlotsRegex(query) {
     '분위기 있는'
   ];
   for (const vibe of vibeList) {
-    if (query.includes(vibe)) {
+    if (matchesAny(normalizedQuery, [vibe])) {
       slots.vibe = vibe === '편안한' ? 'casual' : vibe;
       break;
     }
   }
 
   return slots;
+}
+
+function normalizeForRegex(input = '') {
+  return input
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\r/g, ' ')
+    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchesAny(value, terms) {
+  const compactValue = normalizeForRegex(value).replace(/\s+/g, '');
+  return terms.some((term) => {
+    const normalizedTerm = normalizeForRegex(term).replace(/\s+/g, '');
+    const looseTerm = normalizedTerm
+      .split('')
+      .map((char) => escapeRegexChar(char))
+      .join('\\s*');
+    const re = new RegExp(looseTerm, 'ui');
+    return re.test(compactValue);
+  });
+}
+
+function escapeRegexChar(char) {
+  return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

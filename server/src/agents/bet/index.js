@@ -5,6 +5,7 @@ import {
   getDrivingRoute as defaultGetDrivingRoute,
   mergeCandidateWithRoute as defaultMergeCandidateWithRoute
 } from '../../adapters/index.js';
+import { deduplicateCandidates } from '../../utils/dedupe.js';
 import {
   rankCandidates as defaultRankCandidates,
   validateTimeBudget,
@@ -16,6 +17,8 @@ export const DEFAULT_TOP_N = 5;
 export const DEFAULT_NEARBY_CANDIDATE_WINDOW = 20;
 export const DEFAULT_ROUTE_CONCURRENCY = 4;
 export const DEFAULT_ROUTE_CANDIDATE_LIMIT = 15;
+export const DEFAULT_MIN_CANDIDATE_TARGET = 7;
+export const DEFAULT_CANDIDATE_RADIUS_MULTIPLIERS = [2, 3];
 
 const defaultDependencies = {
   searchNearbyCandidates: defaultSearchNearbyCandidates,
@@ -42,6 +45,65 @@ function createErrorResult(code, message, metadata = {}) {
     message,
     missingFields: [],
     metadata
+  };
+}
+
+function calculateRadius(baseRadius, multiplier) {
+  return Math.round(baseRadius * multiplier);
+}
+
+async function collectCandidatesWithExpandedRadius({
+  searchNearbyCandidates,
+  lat,
+  lng,
+  baseRadius,
+  minCandidateTarget,
+  multipliers,
+  slots
+}) {
+  const attemptedSearches = [];
+  const accumulatedCandidates = [];
+  const seenCandidateIds = new Set();
+  let multiplier = 1;
+  let attempt = 0;
+  const maxAttempts = 6;
+
+  while (
+    accumulatedCandidates.length < minCandidateTarget &&
+    attempt < maxAttempts
+  ) {
+    const searchRadius = calculateRadius(baseRadius, multiplier);
+    const candidates = await searchNearbyCandidates(
+      lat,
+      lng,
+      searchRadius,
+      slots
+    );
+    const normalizedCandidates = Array.isArray(candidates) ? candidates : [];
+
+    attemptedSearches.push({
+      attempt,
+      multiplier,
+      searchRadius,
+      candidateCount: normalizedCandidates.length
+    });
+
+    for (const candidate of normalizedCandidates) {
+      if (candidate?.id && !seenCandidateIds.has(candidate.id)) {
+        seenCandidateIds.add(candidate.id);
+        accumulatedCandidates.push(candidate);
+      }
+    }
+
+    const expandFactor =
+      multipliers[attempt] ?? multipliers[multipliers.length - 1] ?? 3;
+    multiplier = attempt === 0 ? expandFactor : multiplier * expandFactor;
+    attempt += 1;
+  }
+
+  return {
+    candidates: accumulatedCandidates,
+    attemptedSearches
   };
 }
 
@@ -163,12 +225,19 @@ export class BetAgent {
     });
 
     let nearbyCandidates;
+    let attemptedSearches = [];
     try {
-      nearbyCandidates = await this.dependencies.searchNearbyCandidates(
-        location.lat,
-        location.lng,
-        searchRadius
-      );
+      const searchResult = await collectCandidatesWithExpandedRadius({
+        searchNearbyCandidates: this.dependencies.searchNearbyCandidates,
+        slots,
+        lat: location.lat,
+        lng: location.lng,
+        baseRadius: searchRadius,
+        minCandidateTarget: DEFAULT_MIN_CANDIDATE_TARGET,
+        multipliers: DEFAULT_CANDIDATE_RADIUS_MULTIPLIERS
+      });
+      nearbyCandidates = searchResult.candidates;
+      attemptedSearches = searchResult.attemptedSearches;
     } catch (error) {
       this.dependencies.logger.error(
         'Bet nearby candidate search failed',
@@ -203,8 +272,23 @@ export class BetAgent {
     const searchMetadata = {
       ...metadata,
       rawCandidateCount: normalizedCandidates.length,
-      candidateCountForRouting: candidatesForRouting.length
+      candidateCountForRouting: candidatesForRouting.length,
+      searchAttemptCount: attemptedSearches.length,
+      searchAttempts: attemptedSearches
     };
+
+    if (attemptedSearches.length > 1) {
+      this.appendTrace(trace, {
+        event: 'bet_search_radius_expanded',
+        phase: 'candidate_search',
+        attempts: attemptedSearches
+      });
+      this.dependencies.logger.info('Bet search radius expanded', {
+        event: 'bet_search_radius_expanded',
+        agent: 'bet',
+        searchAttempts: attemptedSearches
+      });
+    }
 
     this.dependencies.logger.info('Bet nearby candidates fetched', {
       event: 'bet_candidates_fetched',
@@ -303,9 +387,12 @@ export class BetAgent {
       }
     }
 
+    const dedupedRoutedCandidates = deduplicateCandidates(routedCandidates);
+
     const routeMetadata = {
       ...searchMetadata,
       routedCandidateCount: routedCandidates.length,
+      dedupedRoutedCandidateCount: dedupedRoutedCandidates.length,
       routeFailureCount
     };
 
@@ -341,7 +428,7 @@ export class BetAgent {
     let rankedCandidates;
     try {
       rankedCandidates = this.dependencies.rankCandidates(
-        routedCandidates,
+        dedupedRoutedCandidates,
         slots,
         now,
         normalizedTopN

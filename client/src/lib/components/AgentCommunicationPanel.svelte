@@ -9,13 +9,15 @@
       return '';
     }
   }
-
 </script>
 
-<section class="agent-comm-panel">
-  <h3>에이전트 통신 로그</h3>
+<details class="agent-comm-panel">
+  <summary class="agent-comm-summary">
+    <span>에이전트 통신 로그</span>
+    <span class="agent-comm-count">{logs?.length || 0}개</span>
+  </summary>
   <p class="agent-comm-subtitle">
-    Bet/Fallback/Orchestrator의 내부 요청 흐름을 확인합니다.
+    Orchestrator, Aleph, Bet, Gimel worker가 주고받은 작업 상태입니다.
   </p>
 
   {#if !logs?.length}
@@ -29,7 +31,10 @@
             <span class="agent-comm-time">{formatTimestamp(log.timestamp)}</span>
           </div>
           <p class="agent-comm-detail">
-            from={log.fromAgent || '-'} / to={log.toAgent || '-'}
+            from={log.fromAgent || log.agent || '-'} / to={log.toAgent || '-'}
+            {#if log.worker}
+              · worker={log.worker}
+            {/if}
             {#if log.phase}
               · phase={log.phase}
             {/if}
@@ -44,7 +49,7 @@
       {/each}
     </ul>
   {/if}
-</section>
+</details>
 
 <style>
   .agent-comm-panel {
@@ -54,15 +59,43 @@
     background: var(--color-surface);
   }
 
-  .agent-comm-panel h3 {
-    margin: 0;
+  .agent-comm-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
     font-size: 14px;
+    font-weight: 700;
     color: var(--color-ink);
-    margin-bottom: 4px;
+    list-style: none;
+  }
+
+  .agent-comm-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .agent-comm-summary::after {
+    content: '펼치기';
+    color: var(--color-primary);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .agent-comm-panel[open] .agent-comm-summary::after {
+    content: '접기';
+  }
+
+  .agent-comm-count {
+    margin-left: auto;
+    margin-right: var(--spacing-md);
+    color: var(--color-mute);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
   }
 
   .agent-comm-subtitle {
-    margin: 0 0 var(--spacing-sm);
+    margin: var(--spacing-sm) 0;
     font-size: 12px;
     color: var(--color-mute);
   }
@@ -75,8 +108,8 @@
 
   .agent-comm-list {
     margin: 0;
-    padding-left: var(--spacing-md);
-    list-style: disc;
+    padding-left: 0;
+    list-style: none;
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
@@ -87,6 +120,8 @@
   .agent-comm-item {
     color: var(--color-body);
     font-size: 12px;
+    border-left: 2px solid var(--color-hairline);
+    padding-left: var(--spacing-sm);
   }
 
   .agent-comm-meta {

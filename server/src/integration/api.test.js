@@ -139,6 +139,30 @@ describe('HTTP API Endpoints Integration Tests', () => {
     });
   });
 
+  describe('GET /api/sessions/:sessionId/logs', () => {
+    it('should return the current agent communication log for a live session', async () => {
+      const session = sessions.create('ses_progress123', {});
+      sessions.appendAgentCommunicationLog(session.id, {
+        event: 'gimel_tool_started',
+        fromAgent: 'gimel',
+        toAgent: 'orchestrator',
+        phase: 'review_lookup'
+      });
+
+      const res = await request(app)
+        .get('/api/sessions/ses_progress123/logs')
+        .expect(200);
+
+      expect(res.body.sessionId).toBe('ses_progress123');
+      expect(res.body.agentCommunicationLog).toEqual([
+        expect.objectContaining({
+          event: 'gimel_tool_started',
+          phase: 'review_lookup'
+        })
+      ]);
+    });
+  });
+
   describe('GET /api/location-search', () => {
     it('should return empty list if query is empty or missing', async () => {
       const res = await request(app).get('/api/location-search').expect(200);

@@ -1,4 +1,4 @@
-export function createSessionStore() {
+﻿export function createSessionStore() {
   let sessionId = $state(null);
   let status = $state('initial');
   let query = $state('');
@@ -9,12 +9,90 @@ export function createSessionStore() {
   let results = $state([]);
   let error = $state(null);
   let loading = $state(false);
+  let workflowStatus = $state('');
   let userLocation = $state(null);
   let selectedLocation = $state(null);
   let searchQuery = $state('');
   let locationResults = $state([]);
   let activeResultIndex = $state(0);
   let agentCommunicationLog = $state([]);
+  let progressPollTimer = null;
+
+  function createClientSessionId() {
+    const randomPart =
+      globalThis.crypto?.randomUUID?.().replaceAll('-', '').slice(0, 18) ||
+      Math.random().toString(36).slice(2, 20);
+    return `ses_${randomPart}`;
+  }
+
+  function workflowStatusFromLog(log) {
+    const event = log?.event === 'bet_trace' ? log?.event || log?.phase : log?.event;
+    const phase = log?.phase;
+    if (!log) return '';
+
+    if (event === 'request_entered') return '요청을 접수했습니다.';
+    if (event === 'aleph_parse') return '요청 조건을 분석했습니다.';
+    if (event === 'agent_hop' || event === 'bet_search_started') {
+      return '주변 식당 후보를 검색하고 있습니다.';
+    }
+    if (event === 'bet_trace' && phase === 'radius_expansion') {
+      return '후보가 부족해 검색 반경을 넓히고 있습니다.';
+    }
+    if (event === 'bet_route_lookup_started') {
+      return '이동 시간과 경로를 계산하고 있습니다.';
+    }
+    if (event === 'bet_ranking_completed') {
+      return '조건에 맞는 후보를 고르고 있습니다.';
+    }
+    if (event === 'gimel_worker_started') {
+      return '네이버 리뷰를 병렬로 확인하고 있습니다.';
+    }
+    if (event === 'gimel_tool_started') {
+      return '방문자 리뷰와 사진을 가져오고 있습니다.';
+    }
+    if (event === 'gimel_candidate_excluded_by_reviews') {
+      return '부정 리뷰가 강한 후보를 제외했습니다.';
+    }
+    if (event === 'gimel_reasons' || event === 'gimel_reason_complete') {
+      return '추천 근거를 정리하고 있습니다.';
+    }
+    if (event === 'feedback_applied') return '선호도를 반영하고 있습니다.';
+    return workflowStatus;
+  }
+
+  function applyAgentLogs(logs) {
+    if (!Array.isArray(logs)) return;
+    agentCommunicationLog = logs;
+    const latestStatus = logs
+      .slice()
+      .reverse()
+      .map(workflowStatusFromLog)
+      .find(Boolean);
+    if (latestStatus) workflowStatus = latestStatus;
+  }
+
+  function stopProgressPolling() {
+    if (progressPollTimer) {
+      window.clearInterval(progressPollTimer);
+      progressPollTimer = null;
+    }
+  }
+
+  function startProgressPolling(targetSessionId) {
+    stopProgressPolling();
+    if (!targetSessionId) return;
+
+    progressPollTimer = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/sessions/${targetSessionId}/logs`);
+        if (!response.ok) return;
+        const data = await response.json();
+        applyAgentLogs(data.agentCommunicationLog);
+      } catch {
+        return;
+      }
+    }, 700);
+  }
 
   function reset() {
     sessionId = null;
@@ -28,11 +106,13 @@ export function createSessionStore() {
     agentCommunicationLog = [];
     error = null;
     loading = false;
+    workflowStatus = '';
     userLocation = null;
     selectedLocation = null;
     searchQuery = '';
     locationResults = [];
     activeResultIndex = 0;
+    stopProgressPolling();
   }
 
   function switchToTravelMode() {
@@ -40,6 +120,7 @@ export function createSessionStore() {
     mode = 'travel';
     error = null;
     loading = false;
+    workflowStatus = '';
     selectedLocation = null;
     userLocation = null;
     answers = {};
@@ -49,6 +130,7 @@ export function createSessionStore() {
     agentCommunicationLog = [];
     locationResults = [];
     activeResultIndex = 0;
+    stopProgressPolling();
   }
 
   async function getGeolocation({ silent = false } = {}) {
@@ -57,9 +139,10 @@ export function createSessionStore() {
         error = {
           code: 'UNSUPPORTED_BROWSER',
           message:
-            '이 브라우저는 위치 권한 API를 지원하지 않습니다. 수동 위치 선택으로 진행하세요.'
+            '브라우저가 위치 권한 API를 지원하지 않습니다. 이동/여행 모드에서 위치를 직접 선택해 주세요.'
         };
         status = 'error';
+        workflowStatus = '';
       }
       return null;
     }
@@ -84,9 +167,10 @@ export function createSessionStore() {
             error = {
               code: 'GEO_REQUIRED',
               message:
-                '현재 위치 권한이 거부되어 추천을 시작할 수 없습니다. 이동/여행 모드로 전환해 수동으로 위치를 선택하세요.'
+                '현재 위치 권한이 필요합니다. 권한을 허용하거나 이동/여행 모드에서 위치를 직접 선택해 주세요.'
             };
             status = 'error';
+            workflowStatus = '';
           }
           resolve(null);
         },
@@ -145,6 +229,7 @@ export function createSessionStore() {
     loading = true;
     error = null;
     status = 'loading';
+    workflowStatus = '요청을 보내고 있습니다.';
     results = [];
     activeResultIndex = 0;
     agentCommunicationLog = [];
@@ -153,17 +238,21 @@ export function createSessionStore() {
       const browserLocation = await getGeolocation();
       if (!browserLocation) {
         status = 'error';
+        workflowStatus = '';
         loading = false;
+        stopProgressPolling();
         return;
       }
     } else if (!selectedLocation) {
       error = {
         code: 'GEO_REQUIRED',
         message:
-          '이동/여행 모드에서는 수동 위치 선택이 필요합니다. 출발지 후보를 먼저 선택하세요.'
+          '이동/여행 모드에서는 출발 위치 선택이 필요합니다. 출발지 후보를 먼저 선택해 주세요.'
       };
       status = 'error';
+      workflowStatus = '';
       loading = false;
+      stopProgressPolling();
       return;
     }
 
@@ -172,12 +261,18 @@ export function createSessionStore() {
       error = {
         code: 'GEO_REQUIRED',
         message:
-          '유효한 위치 정보를 가져오지 못했습니다. 위치를 다시 확인 후 재요청하세요.'
+          '유효한 위치 정보를 가져오지 못했습니다. 위치를 다시 확인한 뒤 재요청해 주세요.'
       };
       status = 'error';
+      workflowStatus = '';
       loading = false;
+      stopProgressPolling();
       return;
     }
+
+    const pendingSessionId = createClientSessionId();
+    sessionId = pendingSessionId;
+    startProgressPolling(pendingSessionId);
 
     try {
       const response = await fetch('/api/recommendations', {
@@ -185,6 +280,7 @@ export function createSessionStore() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: query.trim(),
+          clientSessionId: pendingSessionId,
           mode,
           location: requestLocation,
           userLocation:
@@ -215,15 +311,21 @@ export function createSessionStore() {
           message: data.message || '추천 요청 처리 중 문제가 발생했습니다.'
         };
         status = 'error';
+        workflowStatus = '';
       }
     } catch {
       error = {
         code: 'PROVIDER_ERROR',
-        message: '서버와 연결할 수 없습니다. 잠시 후 다시 시도하세요.'
+        message: '서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
       };
       status = 'error';
+      workflowStatus = '';
     } finally {
       loading = false;
+      if (!error) {
+        workflowStatus = '';
+      }
+      stopProgressPolling();
     }
   }
 
@@ -231,6 +333,14 @@ export function createSessionStore() {
     if (!sessionId) return;
     loading = true;
     error = null;
+    activeResultIndex = 0;
+    results = [];
+    agentCommunicationLog = [];
+    const isFeedback = isFeedbackPayload(answerPayload);
+    workflowStatus = isFeedback
+      ? '선호도를 반영하고 있습니다.'
+      : '답변을 보내고 있습니다.';
+    startProgressPolling(sessionId);
 
     try {
       const response = await fetch(`/api/sessions/${sessionId}/answers`, {
@@ -248,15 +358,21 @@ export function createSessionStore() {
           message: data.message || '답변 처리 중 문제가 발생했습니다.'
         };
         status = 'error';
+        workflowStatus = '';
       }
     } catch {
       error = {
         code: 'PROVIDER_ERROR',
-        message: '서버와 연결할 수 없습니다. 잠시 후 다시 시도하세요.'
+        message: '서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
       };
       status = 'error';
+      workflowStatus = '';
     } finally {
       loading = false;
+      if (!error) {
+        workflowStatus = '';
+      }
+      stopProgressPolling();
     }
   }
 
@@ -271,10 +387,16 @@ export function createSessionStore() {
     });
   }
 
+  function isFeedbackPayload(payload = {}) {
+    const action = String(payload?.action || '').toLowerCase();
+    return action === 'like' || action === 'dislike';
+  }
+
   function handleApiResponse(data) {
     if (data.status === 'questions') {
       sessionId = data.sessionId;
       status = 'questions';
+      workflowStatus = '추가 질문에 답변해주세요.';
       missingFields = data.missingFields || [];
       questions = data.questions || [];
       agentCommunicationLog = data.agentCommunicationLog || [];
@@ -291,6 +413,7 @@ export function createSessionStore() {
     } else if (data.status === 'results') {
       sessionId = data.sessionId;
       status = 'results';
+      workflowStatus = '';
       results = data.results || [];
       agentCommunicationLog = data.agentCommunicationLog || [];
       activeResultIndex = 0;
@@ -301,6 +424,7 @@ export function createSessionStore() {
         missingFields: data.missingFields || []
       };
       status = 'error';
+      workflowStatus = '';
     }
   }
 
@@ -346,6 +470,9 @@ export function createSessionStore() {
     },
     get loading() {
       return loading;
+    },
+    get workflowStatus() {
+      return workflowStatus;
     },
     get userLocation() {
       return userLocation;

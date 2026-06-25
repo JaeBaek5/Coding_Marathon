@@ -204,6 +204,44 @@ describe('Bet Agent Unit', () => {
     expect(ranked.map((candidate) => candidate.id)).toEqual(['a', 'b', 'c']);
   });
 
+  it('deduplicates nearly identical routed candidates before ranking', async () => {
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi.fn().mockResolvedValue([
+        createCandidate({
+          id: 'dup-1',
+          name: '깔끔한국밥',
+          address: '서울 강남구 테헤란로 1',
+          location: { lat: 37.501, lng: 127.031 }
+        }),
+        createCandidate({
+          id: 'dup-2',
+          name: '깔끔 한국밥 ',
+          address: '서울강남구테헤란로1',
+          location: { lat: 37.50103, lng: 127.03104 }
+        }),
+        createCandidate({
+          id: 'unique-1',
+          name: '진한집',
+          address: '서울 강남구 테헤란로 2',
+          location: { lat: 37.505, lng: 127.04 }
+        })
+      ]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 400)),
+      logger: createLogger()
+    });
+
+    const result = await agent.search(createSlots(), {
+      now: '2026-05-20T12:00:00+09:00'
+    });
+
+    expect(result.status).toBe('results');
+    expect(result.results.some((item) => item.id === 'unique-1')).toBe(true);
+    const ids = result.results.map((item) => item.id);
+    expect(ids.includes('dup-1')).toBe(true);
+    expect(ids.includes('dup-2')).toBe(false);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('clips ranked results to Top 5 by default without fabricating candidates', () => {
     const slots = createSlots({ totalTimeMinutes: 60, vibe: 'casual' });
     const candidates = Array.from({ length: 6 }, (_, index) => ({
@@ -232,6 +270,90 @@ describe('Bet Agent Unit', () => {
     expect(ranked.map((candidate) => candidate.id)).not.toContain(
       'candidate-6'
     );
+  });
+
+  it('expands search radius to 2x when fewer than 7 candidates are found', async () => {
+    const searchNearbyCandidates = vi.fn().mockImplementation(async (_, __, radius) => {
+      if (radius === 1000) {
+        return [
+          createCandidate({ id: 'r-1' }),
+          createCandidate({ id: 'r-2' }),
+          createCandidate({ id: 'r-3' })
+        ];
+      }
+
+      return [
+        createCandidate({ id: 'r-4' }),
+        createCandidate({ id: 'r-5' }),
+        createCandidate({ id: 'r-6' }),
+        createCandidate({ id: 'r-7' })
+      ];
+    });
+
+    const agent = new BetAgent({
+      searchNearbyCandidates,
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 250)),
+      logger: createLogger()
+    });
+
+    await agent.search(createSlots(), { now: '2026-06-26T12:00:00+09:00' });
+
+    const requestedRadii = searchNearbyCandidates.mock.calls.map(
+      (call) => call[2]
+    );
+    expect(requestedRadii).toHaveLength(2);
+    expect(requestedRadii[0]).toBe(1000);
+    expect(requestedRadii[1]).toBe(2000);
+  });
+
+  it('continues expanding by x3 repeatedly until 7 candidates are collected, then returns results', async () => {
+    const searchNearbyCandidates = vi.fn().mockImplementation(async (_, __, radius) => {
+      if (radius === 1000) {
+        return [
+          createCandidate({ id: 'c1' }),
+          createCandidate({ id: 'c2' }),
+          createCandidate({ id: 'c3' })
+        ];
+      }
+
+      if (radius === 2000) {
+        return [
+          createCandidate({ id: 'c4' }),
+          createCandidate({ id: 'c5' })
+        ];
+      }
+
+      return [
+        createCandidate({ id: 'c6' }),
+        createCandidate({ id: 'c7' }),
+        createCandidate({ id: 'c8' })
+      ];
+    });
+
+    const agent = new BetAgent({
+      searchNearbyCandidates,
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 250)),
+      logger: createLogger()
+    });
+
+    const result = await agent.search(createSlots(), {
+      now: '2026-06-26T12:00:00+09:00'
+    });
+
+    const requestedRadii = searchNearbyCandidates.mock.calls.map(
+      (call) => call[2]
+    );
+    expect(requestedRadii).toEqual([1000, 2000, 6000]);
+    expect(result.metadata?.searchAttempts).toEqual([
+      { attempt: 0, multiplier: 1, searchRadius: 1000, candidateCount: 3 },
+      { attempt: 1, multiplier: 2, searchRadius: 2000, candidateCount: 2 },
+      {
+        attempt: 2,
+        multiplier: 6,
+        searchRadius: 6000,
+        candidateCount: 3
+      }
+    ]);
   });
 
   it('excludes cafes and bars unless the slot bundle explicitly allows them', async () => {

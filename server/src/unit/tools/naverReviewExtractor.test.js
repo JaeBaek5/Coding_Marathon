@@ -288,6 +288,65 @@ describe('extractNaverReviews', () => {
     expect(result.reviewSummary).toHaveProperty('cons');
   });
 
+  it('extracts review photos from nested Naver review media payloads', async () => {
+    const html = buildReviewPageHtml([
+      {
+        body: '매장이 깨끗하고 샤브샤브 구성이 좋아요',
+        rating: 5,
+        media: {
+          images: [
+            { origin: 'https://example.com/review-origin.jpg' },
+            { url: 'https://example.com/review-url.jpg' }
+          ]
+        }
+      }
+    ]);
+
+    const result = await extractNaverReviews(
+      {
+        placeUrl: 'https://m.place.naver.com/restaurant/1234567890/home'
+      },
+      { fetchFn: vi.fn().mockResolvedValue({ ok: true, text: () => html }) }
+    );
+
+    expect(result.reviewPhotos).toEqual([
+      'https://example.com/review-origin.jpg',
+      'https://example.com/review-url.jpg'
+    ]);
+  });
+
+  it('does not reuse a negative contrast review as a positive summary', async () => {
+    const reviews = [
+      {
+        body:
+          '국수나무를 참 좋아하는 사람입니다만, 순천대점의 국수나무는 아쉬운점이 많습니다',
+        rating: 2
+      },
+      { body: '기대했는데 맛이 별로였고 다시 방문하지 않을 것 같아요', rating: 1 },
+      { body: '직원 응대가 불친절해서 편하게 먹기 어려웠어요', rating: 2 },
+      { body: '음식이 늦게 나와 점심시간에 부담스러웠어요', rating: 2 },
+      { body: '가격 대비 양이 적어서 아쉬웠어요', rating: 3 },
+      { body: '면이 불어서 식감이 별로였어요', rating: 2 },
+      { body: '매장이 생각보다 시끄러웠어요', rating: 3 },
+      { body: '국물이 밍밍해서 실망했습니다', rating: 2 },
+      { body: '테이블 정리가 느려 불편했습니다', rating: 2 },
+      { body: '재방문은 안 할 것 같습니다', rating: 1 }
+    ];
+    const html = buildReviewPageHtml(reviews);
+
+    const result = await extractNaverReviews(
+      {
+        placeUrl: 'https://m.place.naver.com/restaurant/1234567890/home'
+      },
+      { fetchFn: vi.fn().mockResolvedValue({ ok: true, text: () => html }) }
+    );
+
+    expect(result.reviewSummary.pros).toBeNull();
+    expect(result.reviewSummary.cons).toContain('아쉬운점');
+    expect(result.negativeReviewCount).toBeGreaterThan(result.positiveReviewCount);
+    expect(result.shouldExcludeFromRecommendation).toBe(true);
+  });
+
   it('caps reviews at 20 even when more are available in state', async () => {
     const reviews = Array.from({ length: 25 }, (_, i) => ({
       body: `리뷰 ${i}번`,
