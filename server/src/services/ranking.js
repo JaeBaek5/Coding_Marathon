@@ -252,14 +252,7 @@ export function rankCandidates(candidates, slot, nowStr, topN = 5) {
       continue;
     }
 
-    // Hard filter: Venue-type gating — decision is driven by Aleph's structured venuePreference slot
-    const venuePreference = slot.venuePreference ?? 'restaurant';
-    if (isCafeCategory(candidate.category) && venuePreference !== 'cafe' && venuePreference !== 'any') {
-      continue;
-    }
-    if (isBarCategory(candidate.category) && venuePreference !== 'bar' && venuePreference !== 'any') {
-      continue;
-    }
+
 
     // Hard filter: Opening hours window check
     if (

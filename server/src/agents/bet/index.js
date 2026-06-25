@@ -206,7 +206,7 @@ export class BetAgent {
         logAgentHop(this.dependencies.logger, {
           fromAgent: 'bet',
           toAgent:
-            transportMode === 'walk' ? 'kakao-mobility' : 'naver-directions',
+            transportMode === 'walk' ? 'naver-walk-estimate' : 'naver-directions',
           phase: 'route_lookup',
           candidateId: candidate.id,
           candidateName: candidate.name,

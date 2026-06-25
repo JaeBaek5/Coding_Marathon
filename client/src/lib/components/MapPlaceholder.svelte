@@ -11,6 +11,12 @@
   let activeInfoWindow = $state(null);
   let naverMapsLoaded = $state(false);
 
+  const DEFAULT_MAP_CENTER = { lat: 36.5, lng: 127.5 };
+
+  function getMapCenter() {
+    return getOriginCoords() || DEFAULT_MAP_CENTER;
+  }
+
   function getOriginMarkerHtml() {
     const background = resolveMapToken('--map-marker-origin-bg', 'backgroundColor');
     const border = resolveMapToken('--map-marker-border', 'borderColor');
@@ -69,7 +75,7 @@
       }
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
         script.async = true;
         script.onload = () => {
           naverMapsLoaded = true;
@@ -94,14 +100,15 @@
   }
 
   function initMap() {
-    if (!mapContainerEl || !window.naver || !window.naver.maps) return;
-    const origin = getOriginCoords();
-    if (!origin) return;
+    if (!mapContainerEl || !window.naver || !window.naver.maps || mapInitialized) {
+      return;
+    }
 
-    const center = new window.naver.maps.LatLng(origin.lat, origin.lng);
+    const centerCoords = getMapCenter();
+    const center = new window.naver.maps.LatLng(centerCoords.lat, centerCoords.lng);
     mapInstance = new window.naver.maps.Map(mapContainerEl, {
       center,
-      zoom: 15,
+      zoom: getOriginCoords() ? 15 : 7,
       zoomControl: true,
       zoomControlOptions: {
         position: window.naver.maps.Position.TOP_RIGHT
@@ -111,9 +118,17 @@
     });
 
     mapInitialized = true;
-    renderOriginMarker(origin);
+
+    const origin = getOriginCoords();
+    if (origin) {
+      renderOriginMarker(origin);
+    }
     renderResultMarkers();
     renderActiveRoute();
+
+    window.naver.maps.Event.once(mapInstance, 'init', () => {
+      mapInstance.autoResize?.();
+    });
   }
 
   function renderOriginMarker(origin) {
@@ -242,17 +257,19 @@
 
   $effect(() => {
     const origin = getOriginCoords();
-    if (origin && mapInitialized) {
-      renderOriginMarker(origin);
-    }
+    if (!origin || !mapInitialized || !mapInstance) return;
+
+    renderOriginMarker(origin);
+    mapInstance.setZoom(15);
+    mapInstance.panTo(new window.naver.maps.LatLng(origin.lat, origin.lng));
   });
 
   $effect(() => {
-    if (mapContainerEl && !mapInitialized) {
-      loadNaverSdk().then(() => {
-        initMap();
-      });
-    }
+    if (!mapContainerEl || mapInitialized) return;
+
+    void loadNaverSdk().then(() => {
+      initMap();
+    });
   });
 </script>
 
@@ -270,7 +287,7 @@
     </div>
   {/if}
 
-  {#if !naverMapsLoaded && !loadError}
+  {#if !mapInitialized && !loadError}
     <div class="map-loading-overlay" data-testid="map-loading">
       <div class="map-loading-spinner"></div>
       <p class="map-loading-text">지도를 불러오는 중...</p>

@@ -967,5 +967,23 @@ def main():
         st.download_button("로그 다운로드(.txt)", "\n".join(lines), file_name="mumuk_poc_log.txt")
 
 
-if __name__ == "__main__" or st.runtime.exists():
-    main()
+def _running_inside_streamlit():
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        return get_script_run_ctx() is not None
+    except Exception:
+        return False
+
+
+if __name__ == "__main__" and not _running_inside_streamlit():
+    import subprocess
+    import sys
+
+    print("Streamlit 앱은 `python poc/app.py`가 아니라 streamlit으로 실행해야 합니다.")
+    print(f"실행 중: {sys.executable} -m streamlit run {__file__}")
+    raise SystemExit(
+        subprocess.call([sys.executable, "-m", "streamlit", "run", __file__, *sys.argv[1:]])
+    )
+
+main()

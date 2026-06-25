@@ -22,7 +22,7 @@ function createCandidate(overrides = {}) {
     distanceMeters: 420,
     confidenceBadge: 'high',
     reason: '실제 리뷰 기준으로 빠르게 점심을 해결하기 좋습니다.',
-    providerAttribution: 'Kakao Local / Kakao Mobility',
+    providerAttribution: 'Naver Local Search / Walk estimate',
     openStatus: true,
     ...overrides
   };

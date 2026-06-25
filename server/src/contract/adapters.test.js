@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { KakaoLocalAdapter } from '../adapters/kakaoLocalAdapter.js';
-import { KakaoMobilityAdapter } from '../adapters/kakaoMobilityAdapter.js';
+import { NaverLocalAdapter } from '../adapters/naverLocalAdapter.js';
 import { NaverDirectionsAdapter } from '../adapters/naverDirectionsAdapter.js';
 import {
-  normalizeKakaoLocalCandidate,
-  normalizeKakaoKeywordLocation,
-  normalizeKakaoWalkingRoute,
+  normalizeNaverLocalItem,
+  normalizeNaverKeywordLocation,
+  normalizeWalkingRoute,
   normalizeNaverDrivingRoute,
   mergeCandidateWithRoute
 } from '../adapters/normalization.js';
+import { estimateWalkingRoute, estimateDrivingRoute } from '../utils/haversine.js';
 import { InMemoryCache, cacheTTLs } from '../utils/cache.js';
 import { deduplicateCandidates, getDistanceMeters } from '../utils/dedupe.js';
 
@@ -19,77 +19,62 @@ describe('Provider Adapters & Mocking Fallback', () => {
     process.env = { ...originalEnv };
   });
 
-  it('should return mock data from KakaoLocalAdapter when API key is missing', async () => {
-    delete process.env.KAKAO_API_KEY;
-    const adapter = new KakaoLocalAdapter();
+  it('should return mock data from NaverLocalAdapter when search credentials are missing', async () => {
+    delete process.env.NAVER_SEARCH_ID;
+    delete process.env.NAVER_SEARCH_SECRET;
+    const adapter = new NaverLocalAdapter();
     const result = await adapter.searchNearbyRestaurants(
       37.4979,
       127.0276,
       1000
     );
-    expect(result.documents).toHaveLength(2);
-    expect(result.documents[0].place_name).toBe('든든한국밥');
+    expect(result).toHaveLength(2);
+    expect(result[0].title).toBe('든든한국밥');
 
     const keywordResult = await adapter.searchKeyword('판교역');
-    expect(keywordResult.documents).toHaveLength(1);
-    expect(keywordResult.documents[0].place_name).toBe('판교역 신분당선');
+    expect(keywordResult).toHaveLength(1);
+    expect(keywordResult[0].title).toBe('판교역 신분당선');
   });
 
-  it('should return mock data from KakaoMobilityAdapter when API key is missing', async () => {
-    delete process.env.KAKAO_API_KEY;
-    const adapter = new KakaoMobilityAdapter();
-    const result = await adapter.getWalkingRoute(
+  it('should estimate walking routes from coordinates when no mobility API is used', () => {
+    const route = estimateWalkingRoute(37.4979, 127.0276, 37.4981, 127.0282);
+    expect(route.durationMinutes).toBeGreaterThan(0);
+    expect(route.distanceMeters).toBeGreaterThan(0);
+    expect(route.path).toHaveLength(2);
+  });
+
+  it('should throw when NaverDirectionsAdapter credentials are missing', async () => {
+    delete process.env.NAVER_CLIENT_ID;
+    delete process.env.NAVER_CLIENT_SECRET;
+    const adapter = new NaverDirectionsAdapter();
+    await expect(
+      adapter.getDrivingRoute(37.4979, 127.0276, 37.4965, 127.0255)
+    ).rejects.toThrow('NAVER_CLIENT_ID/SECRET');
+  });
+
+  it('should estimate driving routes from actual coordinates when live API is unavailable', async () => {
+    const route = estimateDrivingRoute(34.9698, 127.4763, 34.971, 127.478);
+    expect(route.durationMinutes).toBeGreaterThan(0);
+    expect(route.distanceMeters).toBeGreaterThan(0);
+    expect(route.path[0]).toEqual({ lat: 34.9698, lng: 127.4763 });
+    expect(route.path[1]).toEqual({ lat: 34.971, lng: 127.478 });
+  });
+});
+
+describe('Normalization Layer', () => {
+  it('should correctly normalize walking route estimates with integer minutes and meters', () => {
+    const rawWalkingRoute = estimateWalkingRoute(
       37.4979,
       127.0276,
       37.4981,
       127.0282
     );
-    expect(result.routes).toHaveLength(1);
-    expect(result.routes[0].summary.distance).toBe(400);
-  });
 
-  it('should return mock data from NaverDirectionsAdapter when credentials are missing', async () => {
-    delete process.env.NAVER_CLIENT_ID;
-    delete process.env.NAVER_CLIENT_SECRET;
-    const adapter = new NaverDirectionsAdapter();
-    const result = await adapter.getDrivingRoute(
-      37.4979,
-      127.0276,
-      37.4965,
-      127.0255
-    );
-    expect(result.route.trafast).toHaveLength(1);
-    expect(result.route.trafast[0].summary.distance).toBe(650);
-  });
-});
-
-describe('Normalization Layer', () => {
-  it('should correctly normalize walking routes with integer minutes and meters', () => {
-    const rawWalkingRoute = {
-      routes: [
-        {
-          summary: {
-            distance: 400.3,
-            duration: 300
-          },
-          sections: [
-            {
-              roads: [
-                {
-                  vertexes: [127.0276, 37.4979, 127.0282, 37.4981]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    };
-
-    const route = normalizeKakaoWalkingRoute(rawWalkingRoute);
-    expect(route.durationMinutes).toBe(5);
-    expect(route.distanceMeters).toBe(400);
+    const route = normalizeWalkingRoute(rawWalkingRoute);
+    expect(route.durationMinutes).toBeGreaterThan(0);
+    expect(route.distanceMeters).toBeGreaterThan(0);
     expect(route.path).toHaveLength(2);
-    expect(route.path[0]).toEqual({ lng: 127.0276, lat: 37.4979 });
+    expect(route.path[0]).toEqual({ lat: 37.4979, lng: 127.0276 });
   });
 
   it('should correctly normalize driving routes with integer minutes and meters', () => {
@@ -119,18 +104,18 @@ describe('Normalization Layer', () => {
   });
 
   it('should normalize and merge candidate and route information', () => {
-    const rawDoc = {
-      id: '123',
-      place_name: '맛있는 김치찌개',
-      category_name: '음식점 > 한식 > 찌개 > 김치찌개',
-      road_address_name: '서울 강남구 역삼로 1',
-      x: '127.0282',
-      y: '37.4981'
+    const rawItem = {
+      title: '맛있는 김치찌개',
+      link: 'https://map.naver.com/p/entry/place/123',
+      category: '음식점>한식>찌개>김치찌개',
+      roadAddress: '서울 강남구 역삼로 1',
+      mapx: '1270282000',
+      mapy: '374981000'
     };
 
-    const candidate = normalizeKakaoLocalCandidate(rawDoc);
+    const candidate = normalizeNaverLocalItem(rawItem);
     expect(candidate.name).toBe('맛있는 김치찌개');
-    expect(candidate.category).toBe('한식');
+    expect(candidate.category).toBe('김치찌개');
 
     const route = {
       durationMinutes: 5,
@@ -142,21 +127,23 @@ describe('Normalization Layer', () => {
     expect(merged.oneWayRouteMinutes).toBe(5);
     expect(merged.totalExpectedMinutes).toBe(40);
     expect(merged.transportMode).toBe('walk');
-    expect(merged.providerAttribution).toBe('Kakao Local / Kakao Mobility');
+    expect(merged.providerAttribution).toBe(
+      'Naver Local Search / Walk estimate'
+    );
   });
 
   it('should parse travel mode search locations', () => {
-    const rawDoc = {
-      id: '123',
-      place_name: '판교역 신분당선',
-      road_address_name: '경기 성남시 분당구 판교역로 지하 160',
-      x: '127.1112',
-      y: '37.3948'
+    const rawItem = {
+      title: '판교역 신분당선',
+      link: 'https://map.naver.com/p/entry/place/7891011',
+      roadAddress: '경기 성남시 분당구 판교역로 지하 160',
+      mapx: '1271112000',
+      mapy: '373948000'
     };
 
-    const loc = normalizeKakaoKeywordLocation(rawDoc);
+    const loc = normalizeNaverKeywordLocation(rawItem);
     expect(loc.name).toBe('판교역 신분당선');
-    expect(loc.location.lat).toBe(37.3948);
+    expect(loc.location.lat).toBeCloseTo(37.3948, 4);
   });
 });
 
@@ -247,47 +234,46 @@ describe('Cache TTL Correctness', () => {
 });
 
 describe('Task 4 hardening: normalization edges and contract fidelity', () => {
-  it('should carry Kakao place_url into placeUrl so Gimel review extraction can resolve it', () => {
-    const rawDoc = {
-      id: '111111',
-      place_name: '든든한국밥',
-      category_name: '음식점 > 한식 > 국밥 > 순대국',
-      address_name: '서울 강남구 역삼동 123-45',
-      road_address_name: '서울 강남구 테헤란로 123',
-      x: '127.0282',
-      y: '37.4981',
-      place_url: 'http://place.map.kakao.com/111111'
+  it('should carry Naver link into placeUrl so Gimel review extraction can resolve it', () => {
+    const rawItem = {
+      title: '든든한국밥',
+      link: 'https://map.naver.com/p/entry/place/111111',
+      category: '음식점>한식>국밥>순대국',
+      address: '서울 강남구 역삼동 123-45',
+      roadAddress: '서울 강남구 테헤란로 123',
+      mapx: '1270282000',
+      mapy: '374981000'
     };
 
-    const candidate = normalizeKakaoLocalCandidate(rawDoc);
-    expect(candidate.placeUrl).toBe('http://place.map.kakao.com/111111');
+    const candidate = normalizeNaverLocalItem(rawItem);
+    expect(candidate.placeUrl).toBe(
+      'https://map.naver.com/p/entry/place/111111'
+    );
   });
 
-  it('should set placeUrl to null when Kakao omits place_url', () => {
-    const rawDoc = {
-      id: '222222',
-      place_name: '깔끔초밥',
-      category_name: '음식점 > 일식 > 초밥 > 일식집',
-      road_address_name: '서울 강남구 강남대로 543',
-      x: '127.0255',
-      y: '37.4965'
+  it('should set placeUrl to null when Naver omits link', () => {
+    const rawItem = {
+      title: '깔끔초밥',
+      category: '음식점>일식>초밥>일식집',
+      roadAddress: '서울 강남구 강남대로 543',
+      mapx: '1270255000',
+      mapy: '374965000'
     };
 
-    const candidate = normalizeKakaoLocalCandidate(rawDoc);
+    const candidate = normalizeNaverLocalItem(rawItem);
     expect(candidate.placeUrl).toBeNull();
   });
 
   it('should preserve placeUrl through mergeCandidateWithRoute into a schema-valid candidate', () => {
-    const rawDoc = {
-      id: '111111',
-      place_name: '든든한국밥',
-      category_name: '음식점 > 한식 > 국밥 > 순대국',
-      road_address_name: '서울 강남구 테헤란로 123',
-      x: '127.0282',
-      y: '37.4981',
-      place_url: 'http://place.map.kakao.com/111111'
+    const rawItem = {
+      title: '든든한국밥',
+      link: 'https://map.naver.com/p/entry/place/111111',
+      category: '음식점>한식>국밥>순대국',
+      roadAddress: '서울 강남구 테헤란로 123',
+      mapx: '1270282000',
+      mapy: '374981000'
     };
-    const candidate = normalizeKakaoLocalCandidate(rawDoc);
+    const candidate = normalizeNaverLocalItem(rawItem);
     const route = {
       durationMinutes: 5,
       distanceMeters: 400,
@@ -295,12 +281,8 @@ describe('Task 4 hardening: normalization edges and contract fidelity', () => {
     };
 
     const merged = mergeCandidateWithRoute(candidate, route, 'walk');
-    expect(merged.placeUrl).toBe('http://place.map.kakao.com/111111');
-  });
-
-  it('should throw a deterministic error when Kakao walking payload has zero routes', () => {
-    expect(() => normalizeKakaoWalkingRoute({ routes: [] })).toThrow(
-      'No walking routes found'
+    expect(merged.placeUrl).toBe(
+      'https://map.naver.com/p/entry/place/111111'
     );
   });
 

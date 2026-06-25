@@ -11,14 +11,14 @@ function createCandidate(overrides = {}) {
     category: overrides.category ?? '한식',
     address: overrides.address ?? '서울 강남구 테헤란로 123',
     location: overrides.location ?? { lat: 37.4981, lng: 127.0282 },
-    placeUrl: overrides.placeUrl ?? 'https://place.map.kakao.com/111111',
+    placeUrl: overrides.placeUrl ?? 'https://map.naver.com/p/entry/place/111111',
     transportMode: overrides.transportMode ?? 'walk',
     oneWayRouteMinutes: overrides.oneWayRouteMinutes ?? 5,
     totalExpectedMinutes: overrides.totalExpectedMinutes ?? 40,
     distanceMeters: overrides.distanceMeters ?? 400,
     confidenceBadge: overrides.confidenceBadge ?? 'high',
     providerAttribution:
-      overrides.providerAttribution ?? 'Kakao Local / Kakao Mobility',
+      overrides.providerAttribution ?? 'Naver Local Search / Walk estimate',
     openStatus: overrides.openStatus ?? null,
     reason: overrides.reason ?? '',
     priceLevel: null,
@@ -47,7 +47,7 @@ describe('Gimel Integration', () => {
                   function: {
                     name: 'scrape_reviews',
                     arguments: JSON.stringify({
-                      placeUrl: 'https://place.map.kakao.com/111111',
+                      placeUrl: 'https://map.naver.com/p/entry/place/111111',
                       placeName: '든든한국밥'
                     })
                   }
@@ -81,8 +81,8 @@ describe('Gimel Integration', () => {
       }),
       createAgentChatCompletion: (_agentName, request) => create(request),
       scrapeReviews: vi.fn().mockResolvedValue({
-        placeUrl: 'https://place.map.kakao.com/111111',
-        provider: 'Kakao Map',
+        placeUrl: 'https://map.naver.com/p/entry/place/111111',
+        provider: 'Naver Map',
         rating: 4.2,
         reviewCount: 18,
         reviewSnippets: ['국물이 진하고 점심에 빨리 나와요'],
@@ -121,7 +121,7 @@ describe('Gimel Integration', () => {
                     function: {
                       name: 'scrape_reviews',
                       arguments: JSON.stringify({
-                        placeUrl: 'https://place.map.kakao.com/111111',
+                        placeUrl: 'https://map.naver.com/p/entry/place/111111',
                         placeName: '첫번째 식당'
                       })
                     }
@@ -161,7 +161,7 @@ describe('Gimel Integration', () => {
                   function: {
                     name: 'scrape_reviews',
                     arguments: JSON.stringify({
-                      placeUrl: 'https://place.map.kakao.com/222222',
+                      placeUrl: 'https://map.naver.com/p/entry/place/222222',
                       placeName: '두번째 식당'
                     })
                   }
@@ -194,8 +194,8 @@ describe('Gimel Integration', () => {
       }),
       createAgentChatCompletion: (_agentName, request) => create(request),
       scrapeReviews: vi.fn().mockResolvedValue({
-        placeUrl: 'https://place.map.kakao.com/111111',
-        provider: 'Kakao Map',
+        placeUrl: 'https://map.naver.com/p/entry/place/111111',
+        provider: 'Naver Map',
         rating: null,
         reviewCount: null,
         reviewSnippets: ['빠르게 식사하기 좋아요'],
@@ -209,7 +209,7 @@ describe('Gimel Integration', () => {
       createCandidate({
         id: 'second',
         name: '두번째 식당',
-        placeUrl: 'https://place.map.kakao.com/222222'
+        placeUrl: 'https://map.naver.com/p/entry/place/222222'
       })
     ]);
 
@@ -235,7 +235,7 @@ describe('Gimel Integration', () => {
                   function: {
                     name: 'scrape_reviews',
                     arguments: JSON.stringify({
-                      placeUrl: 'https://place.map.kakao.com/111111',
+                      placeUrl: 'https://map.naver.com/p/entry/place/111111',
                       placeName: '든든한국밥'
                     })
                   }
@@ -266,8 +266,8 @@ describe('Gimel Integration', () => {
       getAgentHarness: () => ({ model: 'gimel-model' }),
       createAgentChatCompletion: (_agentName, request) => create(request),
       scrapeReviews: vi.fn().mockResolvedValue({
-        placeUrl: 'https://place.map.kakao.com/111111',
-        provider: 'kakao',
+        placeUrl: 'https://map.naver.com/p/entry/place/111111',
+        provider: 'naver',
         rating: 4.2,
         reviewCount: 18,
         reviewSnippets: ['국물 맛있어요'],

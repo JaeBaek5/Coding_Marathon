@@ -16,14 +16,14 @@ const SCRAPE_REVIEWS_TOOL = {
   function: {
     name: 'scrape_reviews',
     description:
-      'Fetch and scrape real review snippets and ratings from a Kakao or Naver place page URL.',
+      'Fetch and scrape real review snippets and ratings from a Naver place page URL.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         placeUrl: {
           type: 'string',
-          description: 'Kakao Map or Naver Map place URL to inspect.'
+          description: 'Naver Map place URL to inspect.'
         },
         placeName: {
           type: 'string',
@@ -68,10 +68,6 @@ function getProviderFromUrl(placeUrl) {
   }
 
   const normalized = String(placeUrl).toLowerCase();
-  if (normalized.includes('kakao.com')) {
-    return 'Kakao Map';
-  }
-
   if (normalized.includes('naver.com')) {
     return 'Naver Map';
   }
@@ -137,53 +133,7 @@ export async function defaultScrapeReviewsTool({ placeUrl, placeName, address })
     return createToolError('Missing place URL');
   }
 
-  // Kakao / other: static HTML scraping with ReviewExtractionOutputSchema output.
-  let html;
-  try {
-    const response = await fetch(placeUrl);
-    if (!response.ok) {
-      return createToolError(
-        `Failed to fetch place page: ${response.status} ${response.statusText}`
-      );
-    }
-    html = await response.text();
-  } catch (err) {
-    return createToolError(`Network error: ${err?.message ?? 'unknown'}`);
-  }
-
-  const text = stripHtml(html);
-  const provider = getProviderFromUrl(placeUrl)?.toLowerCase().includes('kakao')
-    ? 'kakao'
-    : null;
-  const rating = parseNumericCapture(
-    text,
-    /(?:평점|rating)\s*[:]?\s*([0-5](?:\.\d)?)/i
-  );
-  const reviewCountRaw = parseNumericCapture(
-    text,
-    /(?:리뷰|후기|평가)\s*(?:수|개수|count)?\s*[:]?\s*([0-9][0-9,]*)/i
-  );
-  const snippets = collectReviewSnippets(text);
-  const reviews = snippets.map((body) => ({
-    body,
-    author: null,
-    rating: null,
-    visitedAt: null
-  }));
-
-  return ReviewExtractionOutputSchema.parse({
-    provider,
-    placeUrl,
-    placeId: null,
-    rating,
-    reviewCount: reviewCountRaw === null ? null : Math.round(reviewCountRaw),
-    reviews,
-    reviewSummary: { pros: snippets[0] ?? null, cons: null },
-    reviewSnippets: snippets,
-    extractionMethod: 'static-hydration',
-    fetchedAt: new Date().toISOString(),
-    error: null
-  });
+  return createToolError('Only Naver place URLs are supported');
 }
 
 export function sanitizeCandidateForPrompt(candidate) {

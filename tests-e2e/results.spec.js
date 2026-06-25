@@ -48,7 +48,7 @@ test.describe('Mumuk Results UI', () => {
       distanceMeters: 800,
       confidenceBadge: 'high',
       reason: 'Great place for lunch.',
-      providerAttribution: 'Kakao Local',
+      providerAttribution: 'Naver Local Search',
       openStatus: true
     },
     {
@@ -75,7 +75,7 @@ test.describe('Mumuk Results UI', () => {
       distanceMeters: 3000,
       confidenceBadge: 'medium',
       reason: 'Good pasta.',
-      providerAttribution: 'Kakao Local',
+      providerAttribution: 'Naver Local Search',
       openStatus: null
     },
     {
@@ -102,7 +102,7 @@ test.describe('Mumuk Results UI', () => {
       distanceMeters: 1200,
       confidenceBadge: 'medium',
       reason: 'Nice ramen.',
-      providerAttribution: 'Kakao Local',
+      providerAttribution: 'Naver Local Search',
       openStatus: true
     }
   ];

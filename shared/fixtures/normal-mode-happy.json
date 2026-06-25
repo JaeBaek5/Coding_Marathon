@@ -23,7 +23,7 @@
       "distanceMeters": 400,
       "confidenceBadge": "high",
       "reason": "현재 위치에서 도보 5분 거리(왕복 10분)로, 예산에 맞으며 한식 국밥으로 상사와 함께 든든하고 빠른 식사에 적합합니다.",
-      "providerAttribution": "Kakao Local / Kakao Mobility",
+      "providerAttribution": "Naver Local Search / Walk estimate",
       "openStatus": null
     },
     {
@@ -46,7 +46,7 @@
       "distanceMeters": 650,
       "confidenceBadge": "high",
       "reason": "도보 8분 거리(왕복 16분)로 조용한 분위기에서 식사하실 수 있어 상사와의 점심 식사로 적합합니다.",
-      "providerAttribution": "Kakao Local / Kakao Mobility",
+      "providerAttribution": "Naver Local Search / Walk estimate",
       "openStatus": null
     }
   ]

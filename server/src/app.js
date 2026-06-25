@@ -3,15 +3,13 @@ import cors from 'cors';
 import { healthContract } from '../../shared/contracts/health.js';
 import { orchestrator } from './services/orchestrator.js';
 import { sessions } from './services/sessions.js';
-import { KakaoLocalAdapter } from './adapters/kakaoLocalAdapter.js';
-import { normalizeKakaoKeywordLocation } from './adapters/normalization.js';
+import { searchLocation } from './adapters/index.js';
 import {
   ErrorCodes,
   RecommendationRequestSchema,
   AnswersRequestSchema,
   FeedbackRequestSchema
 } from '../../shared/contracts/schemas.js';
-import { cache, cacheTTLs } from './utils/cache.js';
 import { logger, loggerMiddleware } from './utils/logger.js';
 import { getPublicConfig } from './config/publicConfig.js';
 
@@ -60,26 +58,14 @@ app.get('/api/location-search', async (req, res) => {
     return res.json([]);
   }
 
-  const kakaoLocal = new KakaoLocalAdapter();
-  const cacheKey = `keyword:${q}`;
-  let searchResult;
-
   try {
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      logger.info('Cache HIT for location keyword search', {
-        requestId: req.id,
-        cacheKey
-      });
-      searchResult = cached;
-    } else {
-      logger.info('Cache MISS for location keyword search', {
-        requestId: req.id,
-        cacheKey
-      });
-      searchResult = await kakaoLocal.searchKeyword(q);
-      cache.set(cacheKey, searchResult, cacheTTLs.LOCATION);
-    }
+    const results = await searchLocation(q);
+    return res.json(
+      results.map((item) => ({
+        ...item,
+        coords: item.location
+      }))
+    );
   } catch (err) {
     logger.error('Provider Error: Location search failed', err, {
       requestId: req.id,
@@ -101,17 +87,6 @@ app.get('/api/location-search', async (req, res) => {
         missingFields: []
       });
   }
-
-  const rawDocs = searchResult?.documents || [];
-  const normalized = rawDocs.map((doc) => {
-    const item = normalizeKakaoKeywordLocation(doc);
-    return {
-      ...item,
-      coords: item.location
-    };
-  });
-
-  return res.json(normalized);
 });
 
 app.post('/api/recommendations', async (req, res) => {
