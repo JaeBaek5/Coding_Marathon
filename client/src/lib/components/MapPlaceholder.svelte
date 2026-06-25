@@ -127,7 +127,7 @@
 
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
+        script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}`;
         script.async = true;
         script.onload = () => {
           if (window.naver?.maps) {

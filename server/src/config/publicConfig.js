@@ -5,6 +5,7 @@ function hasValue(value) {
 }
 
 export function getProviderReadiness(env = process.env) {
+  const hasNaverMapClientId = hasValue(env.NAVER_MAP_CLIENT_ID);
   const hasNaverClientId = hasValue(env.NAVER_CLIENT_ID);
   const hasNaverClientSecret = hasValue(env.NAVER_CLIENT_SECRET);
   const hasKakaoApiKey = hasValue(env.KAKAO_API_KEY);
@@ -12,7 +13,7 @@ export function getProviderReadiness(env = process.env) {
     hasValue(env.OPENROUTER_API_KEY) || hasValue(env.LLM_API_KEY);
 
   return {
-    map: hasNaverClientId,
+    map: hasNaverMapClientId || hasNaverClientId,
     kakaoLocal: hasKakaoApiKey,
     kakaoMobility: hasKakaoApiKey,
     naverDirections: hasNaverClientId && hasNaverClientSecret,
@@ -29,9 +30,11 @@ export function getPublicConfig(env = process.env) {
   }
 
   const providerReadiness = getProviderReadiness(env);
-  const naverClientId = hasValue(env.NAVER_CLIENT_ID)
-    ? env.NAVER_CLIENT_ID
-    : null;
+  const naverClientId = hasValue(env.NAVER_MAP_CLIENT_ID)
+    ? env.NAVER_MAP_CLIENT_ID
+    : hasValue(env.NAVER_CLIENT_ID)
+      ? env.NAVER_CLIENT_ID
+      : null;
 
   return {
     mapProvider: 'naver',
