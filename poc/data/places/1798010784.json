@@ -1,0 +1,239 @@
+{
+  "placeId": "1798010784",
+  "placeUrl": "https://m.place.naver.com/restaurant/1798010784/home",
+  "name": "마이어 베이커리카페",
+  "category": "카페,디저트",
+  "address": "전라남도 순천시 중앙로 442-132 마이어",
+  "mainPhoto": "https://ldb-phinf.pstatic.net/20231209_60/1702115895980mHdOf_JPEG/D66A2609-E587-418B-84B5-79DCFDE24735.jpeg",
+  "menuBoardPhoto": "https://blogfiles.pstatic.net/MjAyNjA1MThfMjM3/MDAxNzc5MDcyMTczNDc2.KZTD4UCGA6ysILYSJCu3egSb_Vtu1QkjZukG1hUX12sg.5eG8_Qg-shK-1pO1ABF9rvywYbKaF-xkgdjw7ssp7IYg.JPEG/20260502_151441.jpg/1767x994",
+  "menuItems": [
+    {
+      "name": "아메리카노",
+      "price": "4.9"
+    },
+    {
+      "name": "카페라떼",
+      "price": "5.3"
+    },
+    {
+      "name": "플랫 화이트",
+      "price": "5.3"
+    },
+    {
+      "name": "바닐라 라떼",
+      "price": "5.5"
+    },
+    {
+      "name": "플랫화이트",
+      "price": "5.5"
+    },
+    {
+      "name": "카푸치노",
+      "price": "5.7"
+    },
+    {
+      "name": "크리미 라떼",
+      "price": "5.9"
+    },
+    {
+      "name": "바닐라빈 라떼",
+      "price": "5.9"
+    },
+    {
+      "name": "딸기 라떼",
+      "price": "5.9"
+    },
+    {
+      "name": "카라멜 크림 라떼",
+      "price": "5.9"
+    },
+    {
+      "name": "민트 라떼",
+      "price": "5.9"
+    },
+    {
+      "name": "말그레",
+      "price": "5.9"
+    },
+    {
+      "name": "시그니처 라떼",
+      "price": "5.9"
+    },
+    {
+      "name": "달고나",
+      "price": "5.9"
+    },
+    {
+      "name": "연유라떼",
+      "price": "5.9"
+    },
+    {
+      "name": "순천만 순드레",
+      "price": "6.9"
+    },
+    {
+      "name": "멜랑쥬 순드레",
+      "price": "6.9"
+    },
+    {
+      "name": "크로플파우더 순드레",
+      "price": "6.9"
+    },
+    {
+      "name": "말차 라떼",
+      "price": "6.9"
+    },
+    {
+      "name": "흑임자 라떼",
+      "price": "6.9"
+    },
+    {
+      "name": "고구마 라떼",
+      "price": "6.9"
+    },
+    {
+      "name": "녹스",
+      "price": "4.7"
+    },
+    {
+      "name": "캐모마일",
+      "price": "4.7"
+    },
+    {
+      "name": "얼그레이",
+      "price": "4.7"
+    },
+    {
+      "name": "히비스커스",
+      "price": "4.7"
+    },
+    {
+      "name": "페퍼민트",
+      "price": "4.7"
+    },
+    {
+      "name": "레몬에이드",
+      "price": "5.9"
+    },
+    {
+      "name": "자몽에이드",
+      "price": "5.9"
+    },
+    {
+      "name": "수박",
+      "price": "2.9"
+    },
+    {
+      "name": "망고플레인 가나슈",
+      "price": "5.9"
+    },
+    {
+      "name": "크로와상 카나슈",
+      "price": "5.9"
+    },
+    {
+      "name": "애플시나몬 크로플",
+      "price": "3.4"
+    },
+    {
+      "name": "마약선이에이드",
+      "price": "3.4"
+    },
+    {
+      "name": "모모우유 퓨전쥬스",
+      "price": null
+    },
+    {
+      "name": "자몽 얼그레이",
+      "price": null
+    },
+    {
+      "name": "애플스파클링 에이드",
+      "price": "4.9"
+    },
+    {
+      "name": "아이스티",
+      "price": "4.5"
+    }
+  ],
+  "foodPhotos": [
+    {
+      "title": "음식·음료",
+      "url": "https://blogfiles.pstatic.net/MjAyNTEwMDFfMjMw/MDAxNzU5Mjk5MTgwMjUx.3T2p9wulvE6X1Sn-g7XC7Wo24gJDlkg_zotJuk6qcK4g.Zdq61AhLSIFkcA97SeCJCD6L2R9d9Bna48Fc65x7_V8g.JPEG/900%EF%BC%BF20250717%EF%BC%BF131423.jpg/900x1200"
+    },
+    {
+      "title": "플랫화이트",
+      "url": "https://blogfiles.pstatic.net/MjAyNTEyMTRfMjgx/MDAxNzY1NzA0NzM0MDg3.vf2Wj5YOlh8n5fDLM5aSccRSfTNnaFQpApLxTWc6Ov0g.fyi5DelDbjqM82NEM7IOMEBKk3FcBJyMTC_ypHUDHmAg.JPEG/IMG%EF%BC%BF8572.jpg/900x1200"
+    },
+    {
+      "title": "아메리카노",
+      "url": "https://blogfiles.pstatic.net/MjAyNjAzMDVfMTY2/MDAxNzcyNjk2OTcxODMx.K_fkvIyTNxvYGk__VZ1jy_ViDRHXW2pE3fRNPan-WZYg.k9_b8zi4N3tUZ2GGqGzK_NshJNSJhI0TDo4wcdZOCYYg.JPEG/P20260228_153022855_C60A915D-7320-4D50-9236-6125D6F753D1.jpg/4284x5712"
+    }
+  ],
+  "reviews": [
+    {
+      "author": null,
+      "rating": null,
+      "date": "4.21.화",
+      "body": "진짜 풍경이 너무 좋아요\n그리고 귀여운 강아지도 있어요 \n베이커리도 맛있고 음료도 맛있고 정말 즐거운 시간을 보냈습니다"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "4.26.일",
+      "body": "베이커리맛집👍🏻존맛이어"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.21.목",
+      "body": "음료도 맛있고 빵도 맛있어요"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "4.19.일",
+      "body": "두번째 3시간 걸어서 방문\n커피, 빵 진심 맛인 곳\n야외공간 아기든 반려 애들이건 모두 함께 할수 있는 이곳 좋아영~~*^^*"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.24.일",
+      "body": "밀크티 맛집 입니다....\n주차장 넓고\n카페도 3층까지 있어 넓고 좋아요."
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "2.11.수",
+      "body": "순천 물멍 힐링 카페^^ 너무나도 평화스럽고 좋네요♡ 커피도 빵도 맛있어요🥰"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.7.목",
+      "body": "여기좋아요.최고의뷰"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "2.22.일",
+      "body": "시그니쳐 커피 맛잇어요\n굳 명란 굳"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "4.6.월",
+      "body": "즐거운 봄나들이 행볷난 시간"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.24.일",
+      "body": "주말인데 사람이 없어서 좋네요"
+    }
+  ],
+  "sources": {
+    "reviews": "https://m.place.naver.com/restaurant/1798010784/review/visitor",
+    "photos": "https://m.place.naver.com/restaurant/1798010784/home"
+  }
+}

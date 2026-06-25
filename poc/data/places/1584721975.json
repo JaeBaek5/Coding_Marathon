@@ -1,0 +1,399 @@
+{
+  "placeId": "1584721975",
+  "placeUrl": "https://m.place.naver.com/restaurant/1584721975/home",
+  "name": "다다하다 순천대점",
+  "category": "이자카야",
+  "address": "전라남도 순천시 순천대2길 2 1층",
+  "mainPhoto": "https://ldb-phinf.pstatic.net/20251029_277/1761717952378Xv4Jk_JPEG/%C5%A9%B1%E2%BA%AF%C8%AFgKakaoTalk_20250317_165430356_22.jpg",
+  "menuBoardPhoto": null,
+  "menuItems": [
+    {
+      "name": "[강력추천] 새우로제짬뽕탕",
+      "price": "24900"
+    },
+    {
+      "name": "[강력추천] 와규 직화타다끼",
+      "price": "24900"
+    },
+    {
+      "name": "[추천] 매운 한우대창 전골",
+      "price": "26000"
+    },
+    {
+      "name": "[추천]직화 모둠꼬치",
+      "price": "21500"
+    },
+    {
+      "name": "닭날개 오리지널 (국내산)",
+      "price": "9000"
+    },
+    {
+      "name": "캄파리 선셋비어",
+      "price": "3900"
+    },
+    {
+      "name": "[선호도1위]카스 生맥주 300cc",
+      "price": "1900"
+    },
+    {
+      "name": "애플 하이볼",
+      "price": "7000"
+    },
+    {
+      "name": "[신메뉴] 직화 불스지",
+      "price": "26900"
+    },
+    {
+      "name": "[신메뉴] 크리스피 카라아게",
+      "price": "11000"
+    },
+    {
+      "name": "[신메뉴] 불닭크림우동",
+      "price": "11000"
+    },
+    {
+      "name": "[신메뉴] 아이스크림튀김",
+      "price": "11000"
+    },
+    {
+      "name": "새우 로제 짬뽕탕 세트",
+      "price": "31900"
+    },
+    {
+      "name": "와규 직화 타다끼 세트",
+      "price": "29900"
+    },
+    {
+      "name": "1인 혼술세트",
+      "price": "15900"
+    },
+    {
+      "name": "미소 한우대창 전골",
+      "price": "26000"
+    },
+    {
+      "name": "아롱사태전골",
+      "price": "26000"
+    },
+    {
+      "name": "우삼겹 해물짬뽕탕",
+      "price": "24900"
+    },
+    {
+      "name": "부산 어묵 전골",
+      "price": "17900"
+    },
+    {
+      "name": "누룽지 게살 스프",
+      "price": "12000"
+    },
+    {
+      "name": "유부 김치우동",
+      "price": "11000"
+    },
+    {
+      "name": "돈코츠 라멘",
+      "price": "10500"
+    },
+    {
+      "name": "직화 오돌뼈와 왕주먹밥",
+      "price": "18900"
+    },
+    {
+      "name": "무뼈 국울 닭발",
+      "price": "18900"
+    },
+    {
+      "name": "모둠 소세지",
+      "price": "14900"
+    },
+    {
+      "name": "매콤 우삼겹 볶음우동",
+      "price": "14000"
+    },
+    {
+      "name": "명란 크림 우동",
+      "price": "14000"
+    },
+    {
+      "name": "매운 국물 떡볶이",
+      "price": "13000"
+    },
+    {
+      "name": "해물 오꼬노미야끼",
+      "price": "11000"
+    },
+    {
+      "name": "야끼교자 5PCs",
+      "price": "6000"
+    },
+    {
+      "name": "야끼교자 10PCs",
+      "price": "11000"
+    },
+    {
+      "name": "명란 버터구이",
+      "price": "9500"
+    },
+    {
+      "name": "후라이드 옛날통닭",
+      "price": "13900"
+    },
+    {
+      "name": "치즈 바삭 감자전",
+      "price": "11000"
+    },
+    {
+      "name": "쿠시카츠 튀김",
+      "price": "10500"
+    },
+    {
+      "name": "치즈 롤까스",
+      "price": "11000"
+    },
+    {
+      "name": "트러플 감자튀김",
+      "price": "11000"
+    },
+    {
+      "name": "버터갈릭 감자튀김",
+      "price": "10000"
+    },
+    {
+      "name": "파 듬뿍 타코야끼",
+      "price": "10500"
+    },
+    {
+      "name": "오리지널 타코야끼",
+      "price": "10000"
+    },
+    {
+      "name": "닭껍질 교자",
+      "price": "10000"
+    },
+    {
+      "name": "치킨 난반",
+      "price": "10000"
+    },
+    {
+      "name": "콘 크런치 오징어 튀김",
+      "price": "10000"
+    },
+    {
+      "name": "왕새우튀김",
+      "price": "9000"
+    },
+    {
+      "name": "양념 어묵 꼬치",
+      "price": "7500"
+    },
+    {
+      "name": "직화 팽이삼겹꼬치",
+      "price": "10500"
+    },
+    {
+      "name": "직화 닭꼬치",
+      "price": "9500"
+    },
+    {
+      "name": "양념 닭껍질 꼬치튀김",
+      "price": "9900"
+    },
+    {
+      "name": "직화 파닭꼬치",
+      "price": "9500"
+    },
+    {
+      "name": "직화 염통꼬치",
+      "price": "7900"
+    },
+    {
+      "name": "은행꼬치",
+      "price": "6500"
+    },
+    {
+      "name": "종합어시장 세트",
+      "price": "19900"
+    },
+    {
+      "name": "바삭이 먹태",
+      "price": "15900"
+    },
+    {
+      "name": "반건조 오징어와 쥐포구이",
+      "price": "13900"
+    },
+    {
+      "name": "아귀포와 쥐포구이",
+      "price": "13900"
+    },
+    {
+      "name": "멜론&파인애플",
+      "price": "14500"
+    },
+    {
+      "name": "연유 머스크멜론",
+      "price": "8500"
+    },
+    {
+      "name": "파인애플",
+      "price": "8000"
+    },
+    {
+      "name": "모찌리도후",
+      "price": "9000"
+    },
+    {
+      "name": "트러플 짜계치",
+      "price": "8500"
+    },
+    {
+      "name": "김치볶음밥",
+      "price": "8500"
+    },
+    {
+      "name": "명란 청양고추밥",
+      "price": "8500"
+    },
+    {
+      "name": "베리 팝꽃 아이스크림",
+      "price": "7500"
+    },
+    {
+      "name": "연유토마토",
+      "price": "7500"
+    },
+    {
+      "name": "설탕토마토",
+      "price": "7000"
+    },
+    {
+      "name": "아이스 황도",
+      "price": "7500"
+    },
+    {
+      "name": "파인애플 샤베트",
+      "price": "6000"
+    },
+    {
+      "name": "오이무침",
+      "price": "6000"
+    },
+    {
+      "name": "셀프주먹밥",
+      "price": "4500"
+    },
+    {
+      "name": "산토리 프리미엄몰츠 生맥주 380cc",
+      "price": "7900"
+    },
+    {
+      "name": "카스 生맥주 500cc",
+      "price": "3900"
+    },
+    {
+      "name": "산토리 하이볼",
+      "price": "6000"
+    },
+    {
+      "name": "얼그레이 하이볼",
+      "price": "6500"
+    },
+    {
+      "name": "자몽 하이볼",
+      "price": "6500"
+    },
+    {
+      "name": "월계관 준마이 750ml",
+      "price": "35000"
+    },
+    {
+      "name": "간바레오또상 900ml",
+      "price": "35000"
+    },
+    {
+      "name": "마루 900ml",
+      "price": "35000"
+    }
+  ],
+  "foodPhotos": [
+    {
+      "title": "음식·음료",
+      "url": "https://pup-review-phinf.pstatic.net/MjAyNTEyMTJfMjQ5/MDAxNzY1NTQ0NTY0MzIz.K-nGksyjMMXq6v6fhZmmdKfVVITTBLZrGsSTrlyF85Eg.AwDoR4tbx-mkxU1O44U7BiLor-RaF1f9oOGc0dKi3LMg.JPEG/1000024663.jpg.jpg?type=w1500_60_sharpen"
+    },
+    {
+      "title": "오돌뼈",
+      "url": "https://pup-review-phinf.pstatic.net/MjAyNTEwMjJfMTE2/MDAxNzYxMTQxMzg2MDEy.-WkPKkh3gc9Er-AuAi0fHeTI87sAOTxBQS2CEsQ7wnMg.TTPdHlVnMlmmoimfagGsvy_hPgmuWSOmKReV3Ydipgkg.JPEG/20251022_224948.jpg?type=w1500_60_sharpen"
+    },
+    {
+      "title": "[강력추천] 새우로제짬뽕탕",
+      "url": "https://ldb-phinf.pstatic.net/20250318_251/17422941349827lRcW_PNG/004.png"
+    }
+  ],
+  "reviews": [
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.25.월",
+      "body": "간술하러 들어왔는데 분위기도 좋고 화장실도 깨끗하고 직원분들도 친절해요!! 기본안주인 팝콘도 맛있고 다음에도 이용할거같아요!"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "3.29.일",
+      "body": "닭껍질 교자 안이 육즙이 베어먹는 순간 터져나와요ㅜㅜ촉촉 그자체 너무너무 맛잇어요!야끼라멘도 짜지도않고 양념도 적당하게 조화로워요^^술종류도 메뉴 종류도 다양하고 매장도 넓고 직원분들이 바쁜와중에도 친절하게 응대해주세요!^^"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.29.금",
+      "body": "1차로도 2차로도 언제나 오기 좋은 다다하다입니다 ^^\n기본안주부터 메인메뉴까지 맛있고 모두 친절해요.\n학교 주변에 이만한 맛, 분위기 잡는 곳은 여기 뿐인 것 같습니다 번창하세요!!!"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "6.12.금",
+      "body": "신메뉴여서 한번 시켜봤는데 불맛 제대로고 계란이 킥이에요! 공깃밥 추가해서 스지도 쫄깃쫄깃하고 당면이랑 같이 먹으면 진짜 소주 오백병"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.31.일",
+      "body": "메뉴도 많고 가성비도 좋고 직원들도 항상 친절해서 좋아요ㅎㅎ"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.3.일",
+      "body": "안주가 진짜 다양하고 분위기도 좋고\n맛도 좋네요!!\n서비스도 짱입니다 완전 추천🩷"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "6.17.수",
+      "body": "순천대 안주 맛집이에요~!\n안주가 넘 다양해서 좋아요"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "3.22.일",
+      "body": "오랜만에 간단하게 생맥주 한 잔 하러 들렀습니다.\n500cc는 부담스러운데 300cc라서 딱 간단히 한 잔 하기 좋은 용량이라 마음에 들어요!\n여전히 변함없는 착한 가격에 맛있는 안주!\n언제나 만족스럽게 잘 머무르다 갑니다~"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "6.6.토",
+      "body": "두 번째 방문인데 생맥이랑 안주 맛나요~"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "2.15.일",
+      "body": "기본안주도 고소한 팝콘쓰\n\n타다끼, 오이무침 세트는 꼭드세요~~!!!\n\n가성비 넘칩니다ㅎㅎ\n\n설이라고 팥빙수는 서비스♡\n\n학교앞에 이런곳이 있다는건 \n\n행.운!! 너무 부러워!!!!!!!\n\n다음에 또 방문할게요ㅎㅎ"
+    }
+  ],
+  "sources": {
+    "reviews": "https://m.place.naver.com/restaurant/1584721975/review/visitor",
+    "photos": "https://m.place.naver.com/restaurant/1584721975/home"
+  }
+}

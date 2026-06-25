@@ -1,0 +1,131 @@
+{
+  "placeId": "1823823131",
+  "placeUrl": "https://m.place.naver.com/restaurant/1823823131/home",
+  "name": "샤브로21 순천대점",
+  "category": "샤브샤브",
+  "address": "전라남도 순천시 중앙로 270 1층 103호 샤브로21 순천대점",
+  "mainPhoto": "https://ldb-phinf.pstatic.net/20230818_21/1692361588615ROJDJ_JPEG/IMG_3506.jpeg",
+  "menuBoardPhoto": "https://blogfiles.pstatic.net/MjAyNjAyMTlfMTc2/MDAxNzcxNDcwNTM3NDgy.0L4fJyI7AqSvFxpMxQ8ulcNQP8_smYtrM_4vDZUgd4Yg.G1TZjG2RgfzurF0B9fHc_egLf0L2iu5tYIylDluCG48g.JPEG/1771470501243.jpg/789x670",
+  "menuItems": [
+    {
+      "name": "샤브로21 샤브샤브",
+      "price": "7,500"
+    },
+    {
+      "name": "얼큰 샤브샤브",
+      "price": "8,500"
+    },
+    {
+      "name": "포(phở) 샤브샤브",
+      "price": "8,500"
+    },
+    {
+      "name": "마라 샤브샤브",
+      "price": "8,800"
+    },
+    {
+      "name": "반반 샤브샤브",
+      "price": "9,000"
+    },
+    {
+      "name": "스키야키",
+      "price": "8,500"
+    },
+    {
+      "name": "규동",
+      "price": "6,500"
+    },
+    {
+      "name": "부타동",
+      "price": "6,500"
+    },
+    {
+      "name": "샤브로21 하이볼",
+      "price": "3,800"
+    },
+    {
+      "name": "산토리 하이볼",
+      "price": "5,800"
+    }
+  ],
+  "foodPhotos": [
+    {
+      "title": "음식·음료",
+      "url": "https://blogfiles.pstatic.net/MjAyNjAxMDlfMTgz/MDAxNzY3OTQzOTUzNzYw.8uiyy85KK1MaeLJY-1yLAptVOBkZu8Pojh6HLeZvMr0g.3ZPqZ8klubysLUtk2fgUy-lr0POHtIfF7q-vkspFSC4g.JPEG/KakaoTalk_20260109_160656470_11.jpg/3000x4000"
+    },
+    {
+      "title": "샤브샤브",
+      "url": "https://blogfiles.pstatic.net/MjAyNjAxMTRfMTMx/MDAxNzY4MzcyOTMyMzAy.ciXgqNs684chkqwB--Eoqhkxy0dME2B6hCXgYiIql0sg.8SKj9UXHfH1vx-mBA1OOlPDt-yJQ4CRPvZ1ziNGUMkkg.JPEG/IMG%EF%BC%BF6814.jpg/900x676"
+    },
+    {
+      "title": "샤브로21 샤브샤브",
+      "url": "https://ldb-phinf.pstatic.net/20240409_114/17126553983983sxPc_JPEG/%B8%DE%C0%CE01_%BB%FE%BA%EA%B7%CE21%BB%FE%BA%EA%BB%FE%BA%EAN.jpg"
+    }
+  ],
+  "reviews": [
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.7.목",
+      "body": "샤브샤브를 좋아해서 근처에 있던 곳에 가보았습니다\n여기서 스키야키를 처음 먹었어요\n설명해주시고 따라서 만드니까 샤브랑 다른느낌이엿어요"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "5.3.일",
+      "body": "1인 샤브 굿"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "25.10.10.금",
+      "body": "매장이 너무 깨끗해서 호감..\n인테리어가 취향이라 호감..\n직원분이 너무 친절하셔서 호감..\n양 적댔는데 완전 든든해서 호감..\n메뉴가.. 너무너무 맛있어서 극호감 입니다.. ⭐️⭐️⭐️⭐️⭐️\n진짜 자주 오고싶어요.. 왜 이제야 와봤는지 무한리필갈바에 여기 세번오는게 완전 나았네요🥲\n샤브샤브 좋아하면 꼭 와보세요!!"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "25.6.29.일",
+      "body": "🍲깔끔한 인테리어에 혼밥하기 딱 좋은 구성!\n1인 샤브샤브인데도 육수 선택이 다양해서 취향대로 즐길 수 있어요\n가격도 부담 없고, 마무리 칼국수/죽까지 챙기면 만족도 꽤 높아요👍🏻\n순천대 근처에서 가볍게 맛있는 한 끼 하고 싶을 때 추천!"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "25.7.20.일",
+      "body": "부타동 주문해서 맛있게 먹었답니다\n가족끼리 왔는데 각자 자리에서 원하는 메뉴 골라서 조리해 먹는 방식이 참 신선했어요"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "25.8.1.금",
+      "body": "분위기가 혼밥하기 괜찮은 것 같아요."
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "24.12.14.토",
+      "body": "샤브로 신메뉴가 나왔길래 여자친구랑 같이 왔어요\n야키파스타는 꾸덕하고 고기도 부드러워서 맛있구요 어묵탕에 어묵이 도톰해서 ㅠㅠㅠㅠㅠ 진짜 맛있더라구요 ㅎㅎ 추운 날에 잘 어울리는 메뉴였어요!! 그리고 ㅎㅎ 사장님이 친절하셔서 좋았습니다 ㅎㅎ 가게 분위기도 따뜻헌 연말분위기라 기분전환하기 좋았어요 ! 추천드립니당~~~"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "25.3.17.월",
+      "body": "집에서 가까운 샤브샤브 집이라 저녁 먹으러 다녀왔어요.매장이 깔끔하고 음식 재료도 신선했어요. 그런데 1인분 가격이 저렴한 만큼 고기 추가를 안 할수가 없더라고요.^^\n소식하는 분들께는 추천합니다."
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "25.2.27.목",
+      "body": "일하고 맛점하러 갔어용! 너무 맜있습니당 ㅎㅎ\n가성비 좋구요 혼자 먹기에도 좋았어요:-)🍲"
+    },
+    {
+      "author": null,
+      "rating": null,
+      "date": "24.12.12.목",
+      "body": "친구가 맛있다고 추천해줘서 한번 가봤는데 \n너무 맛있었고 가성비도 좋으니 샤브샤브 좋아하는\n사람들에게 강추!!👍🏻👍🏻 사장님도 넘 친절하셔서\n기분 좋게 다녀갑니다~☺️☺️ 샤브샤브 다 먹고난 후엔 계란죽 필수!! 무조건 추가하세요 ㅠㅠ \n혼자서 인덕션을 사용하니 편리하고 \n육수도 공짜로 추가해줍니다😍 \n꼭 한번 가보시길 추천드려요💛😋\n야채랑 고기도 신선하고 질도 좋아서\n계속 방문하고 싶어요 😭😭🫶🏻"
+    }
+  ],
+  "sources": {
+    "reviews": "https://m.place.naver.com/restaurant/1823823131/review/visitor",
+    "photos": "https://m.place.naver.com/restaurant/1823823131/home"
+  }
+}
