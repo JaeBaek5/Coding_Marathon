@@ -20,6 +20,7 @@ import math
 import json
 import re
 import datetime as dt
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 _POC_DIR = os.path.dirname(os.path.abspath(__file__))
 if _POC_DIR not in sys.path:
@@ -59,6 +60,9 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.osm.jp/api/interpreter",
 ]
 _OVERPASS_CACHE = {}  # (lat5,lng5,radius) -> elements
+NAVER_PLACE_ID_RE = re.compile(
+    r"(?:m|pcmap)\.place\.naver\.com/(?:place|restaurant|hairshop|beauty|hospital|accommodation|cafe)/(\d+)"
+)
 
 # ---------------------------------------------------------------------------
 # 로깅
@@ -238,16 +242,33 @@ def resolve_place_id(title, address):
         timeout=HTTP_TIMEOUT,
     )
     r.encoding = "utf-8"
-    m = re.search(
-        r"m\.place\.naver\.com/(?:place|restaurant|hairshop|beauty|hospital|accommodation|cafe)/(\d+)",
-        r.text,
-    )
+    m = NAVER_PLACE_ID_RE.search(r.text)
     place_id = m.group(1) if m else None
     if place_id:
         log("NAVER_PLACE", f"  → place_id={place_id}")
     else:
         log("NAVER_PLACE", "  → place_id 못 찾음", level="error")
     return place_id
+
+
+def canonicalize_naver_place_url(url):
+    if not url:
+        return None
+    try:
+        parts = urlsplit(url)
+        query = urlencode(
+            [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "timestamp"]
+        )
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+    except Exception:  # noqa: BLE001
+        return re.sub(r"([?&])timestamp=[^&]+&?", r"\1", str(url)).rstrip("?&")
+
+
+def naver_place_id_from_url(url):
+    if not url:
+        return None
+    match = NAVER_PLACE_ID_RE.search(url)
+    return match.group(1) if match else None
 
 
 def _fetch_naver_place_state(place_id, section):
@@ -272,7 +293,7 @@ def _fetch_naver_place_state(place_id, section):
     return None, None
 
 
-def _parse_reviews_from_state(state, limit=10):
+def _parse_reviews_from_state(state, limit=20):
     values = [v for v in (state or {}).values() if isinstance(v, dict)]
     nick_by_id = {
         v.get("id") or key: v.get("nickname") or v.get("name")
@@ -296,7 +317,7 @@ def _parse_reviews_from_state(state, limit=10):
         reviews.append({
             "author": resolve_author(value),
             "rating": value.get("rating") or value.get("starRating"),
-            "date": value.get("visited") or value.get("visitDate") or value.get("created"),
+            "visitedAt": value.get("visited") or value.get("visitDate") or value.get("created"),
             "body": body.strip(),
         })
         if len(reviews) >= limit:
@@ -304,11 +325,47 @@ def _parse_reviews_from_state(state, limit=10):
     return reviews
 
 
-def fetch_naver_reviews(place_id, limit=10):
+def _summarize_reviews(reviews):
+    if not reviews:
+        return {"pros": None, "cons": None}
+
+    positive = [review for review in reviews if isinstance(review.get("rating"), (int, float)) and review["rating"] >= 4]
+    negative = [review for review in reviews if isinstance(review.get("rating"), (int, float)) and review["rating"] <= 2]
+    pros_source = positive[0] if positive else reviews[0]
+    cons_source = negative[0] if negative else next(
+        (review for review in reviews if isinstance(review.get("rating"), (int, float)) and review["rating"] == 3),
+        None,
+    )
+
+    return {
+        "pros": re.sub(r"\s+", " ", pros_source["body"])[:120] if pros_source.get("body") else None,
+        "cons": re.sub(r"\s+", " ", cons_source["body"])[:120] if cons_source and cons_source.get("body") else None,
+    }
+
+
+def fetch_naver_reviews(place_id_or_url, limit=20):
+    canonical_url = canonicalize_naver_place_url(place_id_or_url) if str(place_id_or_url).startswith("http") else None
+    place_id = naver_place_id_from_url(canonical_url) if canonical_url else str(place_id_or_url)
     source, state = _fetch_naver_place_state(place_id, "review/visitor")
     reviews = _parse_reviews_from_state(state, limit=limit)
+    source = canonicalize_naver_place_url(source or canonical_url)
+    review_snippets = [review["body"] for review in reviews[: min(limit, 20)]]
+    review_summary = _summarize_reviews(reviews)
     log("NAVER_PLACE", f"리뷰 수집 → {len(reviews)}개")
-    return {"source": source, "count": len(reviews), "reviews": reviews}
+    return {
+        "provider": "naver",
+        "placeId": place_id,
+        "placeUrl": source,
+        "source": source,
+        "count": len(reviews),
+        "reviewCount": len(reviews),
+        "reviews": reviews,
+        "reviewSummary": review_summary,
+        "reviewSnippets": review_snippets,
+        "extractionMethod": "static-hydration" if source else "unavailable",
+        "fetchedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "error": None if reviews else "No reviews extracted from Naver Place page",
+    }
 
 
 def _parse_photos_and_menu_from_state(state, store_name, food_limit=3):
@@ -472,6 +529,8 @@ def enrich_with_naver_place(c, run_vision=True):
         "menuItems": menu_items,
         "foodPhotos": photos.get("food", []),
         "reviews": reviews.get("reviews", []),
+        "reviewSummary": reviews.get("reviewSummary"),
+        "reviewSnippets": reviews.get("reviewSnippets", []),
         "sources": {
             "reviews": reviews.get("source"),
             "photos": photos.get("source"),
@@ -639,8 +698,13 @@ def reason_fallback(c, transport):
         f"{c['category']} 음식점입니다. 예상 총 소요 {c['total_expected_min']}분으로 시간 예산에 적합합니다."
     ]
     details = c.get("place_details") or {}
+    review_summary = details.get("reviewSummary") or {}
+    if review_summary.get("pros"):
+        parts.append(f"리뷰 장점으로는 {review_summary['pros']}")
+    if review_summary.get("cons"):
+        parts.append(f"다만 리뷰 단점으로는 {review_summary['cons']}")
     reviews = details.get("reviews") or []
-    if reviews:
+    if reviews and not review_summary.get("pros"):
         parts.append(f"네이버 방문자 리뷰에는 “{reviews[0]['body'][:80]}”라는 반응이 있습니다.")
     menu_items = details.get("menuItems") or []
     if menu_items:
@@ -673,6 +737,8 @@ def reason_llm(c, transport):
                             "one_way_min": c["one_way_min"],
                             "total_expected_min": c["total_expected_min"],
                             "naver_place": {
+                                "reviewSummary": (c.get("place_details") or {}).get("reviewSummary"),
+                                "reviewSnippets": (c.get("place_details") or {}).get("reviewSnippets", [])[:5],
                                 "reviews": (c.get("place_details") or {}).get("reviews", [])[:3],
                                 "menuItems": (c.get("place_details") or {}).get("menuItems", [])[:5],
                             },
