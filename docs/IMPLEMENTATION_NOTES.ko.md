@@ -1,6 +1,36 @@
-# 구현 참고 노트 (추가 질문 UI · 술집 의도)
+# 구현 참고 노트 (추가 질문 UI · 술집 의도 · 랭킹 · 작동 로그)
 
 이 문서는 2026-06-26 세션에서 수정한 이슈와, 이후 재발 시 확인·수정할 때 참고하는 용도입니다.
+
+**최신 PR**: [feat(swarm): food catalog, ranking weights, activity log, map UX](https://github.com/JaeBaek5/Coding_Marathon/pull/3) (`codex/naver-only-map-fix`)
+
+---
+
+## 진행 사항 요약 (2026-06-26)
+
+| 영역 | 상태 | 요약 |
+|------|------|------|
+| 음식 마스터 카탈로그 | ✅ | `foodCatalogData.js` **약 160개** · **14카테고리** · intent 버튼 12개 (양식·분식·동남아 포함) |
+| Aleph 음식 맞추기 | ✅ | 상태 설명 → LLM 추론 → 추천 3 + 비추천 2~4 (`foodCravingInference.js`) |
+| Bet 리뷰·랭킹 | ✅ | 네이버 리뷰 수집 → 규칙 점수 + Bet LLM 적합도 → `rankCandidates` |
+| 랭킹 우선순위 | ✅ | **범위 안**: 음식·리뷰 우선 / 거리·시간 후순위 (`timeFit`≤10, `distanceFit`≤5) |
+| 음식 가산 | ✅ | `foodPreferenceFit` 최대 **48** (desiredFoods) / **52** (foodPreferenceScores) |
+| 작동 로그 UI | ✅ | `ActivityStatusBar` — **기본 접힘**, 0.5초 progress 폴링, 단계·소요시간·메타 표시 |
+| 지도 UX | ✅ | 출발·도착·경로 맞춤 뷰포트, 여유시간·도보/차량, 이동 가능 **원** (`travelRange`) |
+| 싫어요 재랭킹 | ✅ | `dislikeSimilarity` — 유사 후보 감점·재정렬 |
+| 검증 | ⚠️ | `npm run test:unit` **155 passed** · `npm run lint` **12 unused-var 실패** (PR 후속) |
+
+### 랭킹 가산 비중 (대략, 조건 충족 시)
+
+| 묶음 | 최대 점수 | 비율(대략) |
+|------|-----------|------------|
+| 먹고 싶은 음식 | 48~52 | ~22% |
+| 리뷰 (규칙) | ~59 | ~29% |
+| 리뷰 (AI) | 45 | ~22% |
+| 이동시간 + 거리 | 15 | ~7% |
+| 동행·분위기·예산 | 35 | ~17% |
+
+동점 시: 총점 → **음식+리뷰** → 이동시간 → 거리.
 
 ---
 
@@ -258,13 +288,17 @@ npm run test:unit -- server/src/unit/agents/aleph.test.js
 | 영역 | 파일 |
 |------|------|
 | 공유 프리셋 | `shared/contracts/questionPresets.js` |
+| **음식 카탈로그** | `shared/contracts/foodCatalog.js`, `shared/contracts/foodCatalogData.js` |
+| **음식 맞추기 LLM** | `server/src/agents/aleph/foodCravingInference.js` |
 | 질문 options | `server/src/agents/aleph/questionOptions.js`, `followUpQuestions.js` |
-| 슬롯·의도 | `server/src/agents/aleph/index.js`, `server/src/utils/venueGating.js` |
+| 슬롯·의도 | `server/src/agents/aleph/index.js`, `server/src/utils/venueGating.js`, `foodPreference.js` |
+| **리뷰 점수** | `server/src/services/reviewScoring.js`, `llmReviewScoring.js`, `candidateEnrichment.js` |
+| **작동 로그** | `server/src/services/sessionProgress.js`, `progressFormat.js`, `client/.../ActivityStatusBar.svelte` |
 | 검색 | `server/src/adapters/naverLocalAdapter.js`, `server/src/adapters/index.js` |
 | 랭킹 | `server/src/services/ranking.js` |
-| Bet | `server/src/agents/bet/index.js` |
-| 해장 의도 | `server/src/utils/foodPreference.js` |
-| UI | `client/src/lib/components/QuestionForm.svelte`, `client/vite.config.js` |
+| Bet / Gimel / Orchestrator | `server/src/agents/bet/index.js`, `gimel/index.js`, `orchestrator/index.js` |
+| **지도·이동 범위** | `client/src/lib/components/MapPlaceholder.svelte`, `client/src/lib/utils/travelRange.js` |
+| UI | `client/src/lib/components/QuestionForm.svelte`, `QueryForm.svelte`, `client/vite.config.js` |
 
 ---
 
@@ -285,9 +319,76 @@ npm run test:unit -- server/src/unit/agents/aleph.test.js
 1. `npm run dev` — vite.config 변경 후 dev 서버 재시작
 2. Query: `친구랑 술마시고 싶다` → 술집/호프 계열
 3. Query: `어제 술마셔서 해장 하고 싶다` → 국밥·해장국 계열 (치킨 X)
-4. 슬롯 부족 시 추가 질문 → pill 버튼 노출 확인
-5. unit: `npm run test:unit`
+4. Query: `고기 먹고 싶다` → 가까운 치킨보다 고깃집·리뷰 매칭 우선 (범위 내)
+5. 슬롯 부족 시 추가 질문 → pill 버튼 노출 확인
+6. 추천 요청 중 하단 **작동 로그** 바 → 탭하여 단계 펼침 확인
+7. 지도: 여유 시간·도보/차량 변경 시 원 반경 변화 확인
+8. unit: `npm run test:unit` (155 tests)
 
 ---
 
-*마지막 갱신: 2026-06-26*
+## 7. 음식 카탈로그 · 랭킹 · 작동 로그 (2026-06-26)
+
+### 7.1 음식 마스터 카탈로그
+
+- **단일 출처**: `shared/contracts/foodCatalogData.js` (데이터) + `foodCatalog.js` (조회 API)
+- **규모**: 약 **160** 메뉴/의도, **14** 카테고리 (`southeast_asian` 포함)
+- **용도**: `desiredFoods`, 검색어 확장, 랭킹 키워드, Aleph 질문 버튼, 음식 맞추기 LLM 검증
+- **intent 버튼 12개**: 해장, 고기, 한식, 일식, 중식, 면, 치킨, 해산물, 찌개, 양식, 분식, 동남아
+
+### 7.2 Aleph 음식 맞추기
+
+- `foodCravingInference.js`: 사용자 **상태만** 있어도 LLM이 추천 음식 3 + 비추천 2~4 추론
+- `QuestionForm`: 비추천 태그 표시, 음식 선택 전 제출 비활성화
+- Aleph 기본 모델: `anthropic/claude-sonnet-4.6` (설정은 `server/src/llm/config.js`)
+
+### 7.3 Bet → 랭킹 파이프라인
+
+```text
+Naver 검색 → 경로 계산 → 리뷰 수집(enrich) → LLM 리뷰 적합도(선택) → rankCandidates → Gimel 이유
+```
+
+- **리뷰 규칙 점수** (`reviewScoring.js`): 평점·긍정/부정 키워드·원하는 음식 키워드·리뷰 개수
+- **리뷰 AI** (`llmReviewScoring.js`): relevance 0~100 → 최대 30점, sentiment → 최대 15점
+- **음식 가산** (`foodPreference.js`): 이름/카테고리 키워드 매칭, mismatch 감점
+
+### 7.4 랭킹 우선순위 (사용자 요청 반영)
+
+**원칙**: 이동 **범위 안**이면 거리보다 **먹고 싶은 음식 + 리뷰**가 순위를 가른다.
+
+| 항목 | 최대 | 역할 |
+|------|------|------|
+| `foodPreferenceFit` | 48~52 | 1순위 축 |
+| `reviewFit` + LLM | ~104 | 1순위 축 |
+| `timeFit` | 10 | 범위 내 동점 처리 (범위 밖 → 0) |
+| `distanceFit` | 5 | 최후순위 가산 |
+
+구현: `server/src/services/ranking.js` — `RANKING_WEIGHTS`, `computeTimeFit`, `computeDistanceFit`, 정렬 시 `foodReviewSortScore` 우선.
+
+### 7.5 작동 로그 (Activity Log)
+
+| 계층 | 설명 |
+|------|------|
+| 서버 | `setSessionProgress` — Orchestrator / Bet / Gimel 단계를 `session.progressLog`에 기록 |
+| API | `GET /api/sessions/:id/progress` |
+| 클라이언트 | `session.svelte.js` 500ms 폴링 → `ActivityStatusBar` |
+| UI | **기본 접힘**; 펼치면 phase 라벨, 시각, +소요시간, detail, meta |
+
+### 7.6 지도
+
+- `MapPlaceholder.svelte`: 출발·도착·경로 기준 `fitBounds`
+- 좌상단 **여유 시간(분)** + **도보/차량** → `travelRange.js`로 이동 가능 원 반경 표시
+
+### 재발 시 확인
+
+```bash
+npm run test:unit -- server/src/unit/contracts/foodCatalog.test.js
+npm run test:unit -- server/src/unit/services/ranking.test.js
+npm run test:unit -- server/src/unit/services/reviewScoring.test.js
+npm run test:unit -- server/src/unit/agents/foodCravingInference.test.js
+npm run test:unit -- server/src/unit/services/sessionProgress.test.js
+```
+
+---
+
+*마지막 갱신: 2026-06-26 — PR #3 (`codex/naver-only-map-fix`)*
