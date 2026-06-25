@@ -5,11 +5,12 @@
   let mapInstance = $state(null);
   let mapInitialized = $state(false);
   let loadError = $state(null);
-  let originMarker = $state(null);
-  let resultMarkers = $state([]);
-  let activePolyline = $state(null);
-  let activeInfoWindow = $state(null);
   let naverMapsLoaded = $state(false);
+  let originMarker = null;
+  let resultMarkers = [];
+  let activePolyline = null;
+  let activeInfoWindow = null;
+  let renderProbeTimer = null;
 
   function getOriginMarkerHtml() {
     const background = resolveMapToken('--map-marker-origin-bg', 'backgroundColor');
@@ -17,7 +18,7 @@
     const shadow = resolveMapToken('--map-marker-origin-shadow', 'boxShadow');
     const foreground = resolveMapToken('--map-marker-foreground', 'color');
 
-    return `<div style="width:28px;height:28px;background:${background};border:3px solid ${border};border-radius:50%;box-shadow:${shadow};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${foreground};">출</div>`;
+    return `<div style="width:28px;height:28px;background:${background};border:3px solid ${border};border-radius:50%;box-shadow:${shadow};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${foreground};">O</div>`;
   }
 
   function getResultMarkerHtml(index) {
@@ -53,36 +54,100 @@
     return resolvedValue;
   }
 
+  function getDisplayResults() {
+    return session.results ?? [];
+  }
+
+  function getActiveResultIndex(itemsLength) {
+    const rawIndex = Number(session.activeResultIndex);
+    if (!Number.isInteger(rawIndex) || rawIndex < 0 || rawIndex >= itemsLength) {
+      return 0;
+    }
+    return rawIndex;
+  }
+
+  function hasCoords(item) {
+    return (
+      item &&
+      item.location &&
+      Number.isFinite(item.location.lat) &&
+      Number.isFinite(item.location.lng)
+    );
+  }
+
+  function setMapError(message) {
+    if (!loadError) {
+      loadError = message;
+      if (renderProbeTimer) {
+        clearTimeout(renderProbeTimer);
+        renderProbeTimer = null;
+      }
+      console.error('[MapPlaceholder] mapError:', message);
+    }
+  }
+
+  function resetMapState() {
+    if (renderProbeTimer) {
+      clearTimeout(renderProbeTimer);
+      renderProbeTimer = null;
+    }
+    if (activeInfoWindow) {
+      activeInfoWindow.close();
+      activeInfoWindow = null;
+    }
+    if (activePolyline) {
+      activePolyline.setMap(null);
+      activePolyline = null;
+    }
+    for (const marker of resultMarkers) {
+      marker.setMap(null);
+    }
+    resultMarkers = [];
+    if (originMarker) {
+      originMarker.setMap(null);
+      originMarker = null;
+    }
+  }
+
   async function loadNaverSdk() {
     if (window.naver && window.naver.maps) {
       naverMapsLoaded = true;
       return;
     }
+
     try {
       const res = await fetch('/api/config/public');
       const config = await res.json();
       const clientId = config.naverClientId;
       if (!config.mapReady || !clientId) {
         loadError =
-          'NAVER 지도 API 키가 설정되지 않았습니다. server/.env에 NAVER_CLIENT_ID를 넣어 주세요.';
+          'Naver 지도 API 키 설정이 없습니다. server/.env의 NAVER_CLIENT_ID를 확인하세요.';
         return;
       }
+
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
         script.async = true;
         script.onload = () => {
-          naverMapsLoaded = true;
+          if (window.naver?.maps) {
+            console.debug('[MapPlaceholder] NAVER SDK loaded');
+            naverMapsLoaded = true;
+          } else {
+            setMapError(
+              'NAVER Maps SDK가 로드되었지만 API 객체를 사용할 수 없습니다. 키/도메인 인증을 확인하세요.'
+            );
+          }
           resolve();
         };
         script.onerror = () => {
-          loadError = 'NAVER 지도 SDK를 불러오지 못했습니다.';
+          setMapError('Naver Maps SDK 로드에 실패했습니다.');
           reject(new Error('SDK load failed'));
         };
         document.head.appendChild(script);
       });
     } catch {
-      loadError = '지도 설정을 불러오지 못했습니다.';
+      setMapError('지도 설정을 불러오지 못했습니다.');
     }
   }
 
@@ -94,31 +159,51 @@
   }
 
   function initMap() {
-    if (!mapContainerEl || !window.naver || !window.naver.maps) return;
+    if (!mapContainerEl || !window.naver || !window.naver.maps) {
+      return;
+    }
+
     const origin = getOriginCoords();
-    if (!origin) return;
+    if (!origin) {
+      console.debug('[MapPlaceholder] initMap waiting for origin coordinates');
+      return;
+    }
 
-    const center = new window.naver.maps.LatLng(origin.lat, origin.lng);
-    mapInstance = new window.naver.maps.Map(mapContainerEl, {
-      center,
-      zoom: 15,
-      zoomControl: true,
-      zoomControlOptions: {
-        position: window.naver.maps.Position.TOP_RIGHT
-      },
-      mapDataControl: false,
-      scaleControl: false
-    });
+    try {
+      const center = new window.naver.maps.LatLng(origin.lat, origin.lng);
+      mapInstance = new window.naver.maps.Map(mapContainerEl, {
+        center,
+        zoom: 15,
+        zoomControl: true,
+        zoomControlOptions: {
+          position: window.naver.maps.Position.TOP_RIGHT
+        },
+        mapDataControl: false,
+        scaleControl: false
+      });
 
-    mapInitialized = true;
-    renderOriginMarker(origin);
-    renderResultMarkers();
-    renderActiveRoute();
+      mapInitialized = true;
+      renderOriginMarker(origin);
+      renderResultMarkers();
+      renderActiveRoute();
+      console.debug('[MapPlaceholder] map initialized');
+
+      renderProbeTimer = setTimeout(() => {
+        if (mapInitialized && mapContainerEl && mapContainerEl.children.length === 0) {
+          setMapError('지도가 렌더링되지 않습니다. NAVER Maps API 인증 상태를 확인하세요.');
+        }
+      }, 1800);
+    } catch (error) {
+      setMapError('지도 초기화 중 오류가 발생했습니다.');
+      console.error('[MapPlaceholder] initMap error', error);
+    }
   }
 
   function renderOriginMarker(origin) {
     if (!mapInstance) return;
-    if (originMarker) originMarker.setMap(null);
+    if (originMarker) {
+      originMarker.setMap(null);
+    }
 
     originMarker = new window.naver.maps.Marker({
       position: new window.naver.maps.LatLng(origin.lat, origin.lng),
@@ -132,13 +217,19 @@
   }
 
   function renderResultMarkers() {
-    if (!mapInstance || !session.displayResults?.length) return;
+    const results = getDisplayResults();
+    if (!mapInstance || !results.length) return;
 
-    for (const m of resultMarkers) m.setMap(null);
+    for (const marker of resultMarkers) {
+      marker.setMap(null);
+    }
     resultMarkers = [];
 
-    session.displayResults.forEach((item, i) => {
-      const isActive = session.activeResultIndex === i;
+    const activeIndex = getActiveResultIndex(results.length);
+
+    results.forEach((item, i) => {
+      if (!hasCoords(item)) return;
+      const isActive = activeIndex === i;
       const position = new window.naver.maps.LatLng(item.location.lat, item.location.lng);
 
       const marker = new window.naver.maps.Marker({
@@ -171,12 +262,14 @@
       activeInfoWindow = null;
     }
 
-    const activeItem = session.displayResults[session.activeResultIndex];
-    if (!activeItem) return;
+    const results = getDisplayResults();
+    const activeIndex = getActiveResultIndex(results.length);
+    const activeItem = results[activeIndex];
+    if (!activeItem || !hasCoords(activeItem)) return;
 
     if (activeItem.path && activeItem.path.length > 1) {
       const pathCoords = activeItem.path.map(
-        p => new window.naver.maps.LatLng(p.lat, p.lng)
+        (point) => new window.naver.maps.LatLng(point.lat, point.lng)
       );
       activePolyline = new window.naver.maps.Polyline({
         map: mapInstance,
@@ -194,9 +287,9 @@
         new window.naver.maps.LatLng(origin.lat, origin.lng),
         new window.naver.maps.LatLng(activeItem.location.lat, activeItem.location.lng)
       );
-      activeItem.path.forEach(p => {
-        bounds.extend(new window.naver.maps.LatLng(p.lat, p.lng));
-      });
+      for (const point of activeItem.path) {
+        bounds.extend(new window.naver.maps.LatLng(point.lat, point.lng));
+      }
       mapInstance.fitBounds(bounds, { top: 80, right: 80, bottom: 80, left: 80 });
     } else {
       mapInstance.panTo(new window.naver.maps.LatLng(activeItem.location.lat, activeItem.location.lng));
@@ -205,9 +298,9 @@
     const infoForeground = resolveMapToken('--map-info-foreground', 'color');
     const infoMuted = resolveMapToken('--map-info-muted', 'color');
     const infoContent = `
-      <div style="padding:8px 12px;font-family:var(--font-sans);max-width:200px;color:${infoForeground};">
+      <div style="padding:8px 12px;font-family:var(--font-sans);max-width:220px;color:${infoForeground};">
         <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${activeItem.name}</div>
-        <div style="font-size:12px;color:${infoMuted};">${activeItem.category} · ${activeItem.totalExpectedMinutes}분</div>
+        <div style="font-size:12px;color:${infoMuted};">${activeItem.category} / 소요 ${activeItem.totalExpectedMinutes}분</div>
       </div>
     `;
     activeInfoWindow = new window.naver.maps.InfoWindow({
@@ -217,15 +310,27 @@
       borderRadius: resolveMapToken('--map-info-radius', 'borderRadius'),
       boxShadow: resolveMapToken('--map-info-shadow', 'boxShadow')
     });
-    activeInfoWindow.open(
-      mapInstance,
-      resultMarkers[session.activeResultIndex]
-    );
+    const activeMarker = resultMarkers[activeIndex];
+    if (activeMarker) {
+      activeInfoWindow.open(mapInstance, activeMarker);
+    }
+  }
+
+  function ensureValidActiveIndex() {
+    const results = getDisplayResults();
+    const activeIndex = getActiveResultIndex(results.length);
+    if (results.length === 0 && session.activeResultIndex !== 0) {
+      session.activeResultIndex = 0;
+      return;
+    }
+    if (session.activeResultIndex !== activeIndex) {
+      session.activeResultIndex = activeIndex;
+    }
   }
 
   $effect(() => {
-    session.displayResults;
-    session.showFullPool;
+    session.results;
+    ensureValidActiveIndex();
     if (mapInitialized) {
       renderResultMarkers();
       renderActiveRoute();
@@ -248,11 +353,25 @@
   });
 
   $effect(() => {
-    if (mapContainerEl && !mapInitialized) {
+    const origin = getOriginCoords();
+    if (mapContainerEl && !mapInitialized && !loadError && origin) {
+      resetMapState();
       loadNaverSdk().then(() => {
-        initMap();
+        if (!loadError) {
+          initMap();
+        }
       });
     }
+  });
+
+  $effect(() => {
+    return () => {
+      resetMapState();
+      if (renderProbeTimer) {
+        clearTimeout(renderProbeTimer);
+        renderProbeTimer = null;
+      }
+    };
   });
 </script>
 
@@ -273,7 +392,7 @@
   {#if !naverMapsLoaded && !loadError}
     <div class="map-loading-overlay" data-testid="map-loading">
       <div class="map-loading-spinner"></div>
-      <p class="map-loading-text">지도를 불러오는 중...</p>
+      <p class="map-loading-text">지도를 불러오는 중입니다.</p>
     </div>
   {/if}
 </div>
@@ -323,6 +442,8 @@
     gap: var(--spacing-sm);
     background-color: var(--map-overlay-bg);
     z-index: 10;
+    padding: var(--spacing-md);
+    text-align: center;
   }
 
   .map-loading-spinner {
@@ -334,20 +455,20 @@
     animation: spin 0.8s linear infinite;
   }
 
-  .map-loading-text {
+  .map-loading-text,
+  .map-error-text {
     font-size: 14px;
     color: var(--color-mute);
   }
 
   .map-error-text {
-    font-size: 14px;
     color: var(--color-primary);
     font-weight: 600;
-    text-align: center;
-    padding: var(--spacing-md);
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>
