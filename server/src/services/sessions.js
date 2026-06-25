@@ -12,6 +12,11 @@ class SessionStore {
       slots: { ...initialSlots },
       turnCount: 0,
       candidates: [],
+      candidatePool: [],
+      likedIds: [],
+      dislikedIds: [],
+      dislikeCount: 0,
+      showFullPool: false,
       createdAt: now,
       updatedAt: now
     };
@@ -46,6 +51,21 @@ class SessionStore {
     }
     if (updates.candidates !== undefined) {
       session.candidates = updates.candidates;
+    }
+    if (updates.candidatePool !== undefined) {
+      session.candidatePool = updates.candidatePool;
+    }
+    if (updates.likedIds !== undefined) {
+      session.likedIds = updates.likedIds;
+    }
+    if (updates.dislikedIds !== undefined) {
+      session.dislikedIds = updates.dislikedIds;
+    }
+    if (updates.dislikeCount !== undefined) {
+      session.dislikeCount = updates.dislikeCount;
+    }
+    if (updates.showFullPool !== undefined) {
+      session.showFullPool = updates.showFullPool;
     }
 
     session.updatedAt = Date.now();

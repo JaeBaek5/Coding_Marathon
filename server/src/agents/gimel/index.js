@@ -8,6 +8,7 @@ import {
   getAgentHarness
 } from '../../llm/client.js';
 import { logger, logAgentHop } from '../../utils/logger.js';
+import { extractNaverPlaceReviews } from '../../tools/naverPlaceExtraction.js';
 
 const SCRAPE_REVIEWS_TOOL = {
   type: 'function',
@@ -118,7 +119,16 @@ function collectReviewSnippets(text) {
   return snippets;
 }
 
-export async function defaultScrapeReviewsTool({ placeUrl }) {
+export async function defaultScrapeReviewsTool({ placeUrl, placeName, address }) {
+  if (!placeUrl && !placeName) {
+    return createToolError('Missing place URL or place name');
+  }
+
+  const provider = getProviderFromUrl(placeUrl);
+  if (provider === 'Naver Map' || String(placeUrl || '').includes('naver.com')) {
+    return extractNaverPlaceReviews({ placeUrl, placeName, address });
+  }
+
   if (!placeUrl) {
     return createToolError('Missing place URL');
   }
@@ -132,7 +142,7 @@ export async function defaultScrapeReviewsTool({ placeUrl }) {
 
   const html = await response.text();
   const text = stripHtml(html);
-  const provider = getProviderFromUrl(placeUrl);
+  const resolvedProvider = getProviderFromUrl(placeUrl);
   const rating = parseNumericCapture(
     text,
     /(?:평점|rating)\s*[:]?\s*([0-5](?:\.\d)?)/i
@@ -145,7 +155,7 @@ export async function defaultScrapeReviewsTool({ placeUrl }) {
 
   return {
     placeUrl,
-    provider,
+    provider: resolvedProvider,
     rating,
     reviewCount: reviewCount === null ? null : Math.round(reviewCount),
     reviewSnippets,
@@ -324,9 +334,10 @@ export class GimelAgent {
     });
 
     for (const candidate of candidates) {
+      let scraped = createToolError('LLM unavailable');
       let reason = createGroundedFallbackReason(
         sanitizeCandidateForPrompt(candidate),
-        createToolError('LLM unavailable')
+        scraped
       );
 
       if (llmRuntime) {
@@ -337,12 +348,14 @@ export class GimelAgent {
           candidateId: candidate.id,
           model: llmRuntime.model
         });
-        const { parsed, scraped } = await runReasonToolLoop(
+        const toolLoopResult = await runReasonToolLoop(
           candidate,
           this.dependencies.tools,
           this.dependencies.scrapeReviews,
           this.dependencies.createAgentChatCompletion
         );
+        scraped = toolLoopResult.scraped;
+        const { parsed } = toolLoopResult;
 
         const llmReason = parsed?.reasons?.find(
           (item) => item.id === candidate.id
@@ -373,7 +386,16 @@ export class GimelAgent {
             }
           );
         }
-      } else {
+      } else if (candidate.placeUrl || candidate.name) {
+        scraped = await this.dependencies.scrapeReviews({
+          placeUrl: candidate.placeUrl,
+          placeName: candidate.name,
+          address: candidate.address
+        });
+        reason = createGroundedFallbackReason(
+          sanitizeCandidateForPrompt(candidate),
+          scraped
+        );
         this.dependencies.logger.warn(
           'Gimel used deterministic fallback without LLM',
           {
@@ -385,7 +407,15 @@ export class GimelAgent {
 
       results.push({
         ...candidate,
-        reason
+        reason,
+        reviewSummary: scraped?.reviewSummary ?? candidate.reviewSummary ?? null,
+        reviewSnippets: scraped?.reviewSnippets ?? candidate.reviewSnippets ?? [],
+        rating:
+          typeof scraped?.rating === 'number' ? scraped.rating : candidate.rating,
+        reviewCount:
+          typeof scraped?.reviewCount === 'number'
+            ? scraped.reviewCount
+            : candidate.reviewCount
       });
     }
 

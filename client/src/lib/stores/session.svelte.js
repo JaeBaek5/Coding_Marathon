@@ -7,6 +7,9 @@ export function createSessionStore() {
   let missingFields = $state([]);
   let questions = $state([]);
   let results = $state([]);
+  let currentRecommendation = $state(null);
+  let candidatePool = $state([]);
+  let showFullPool = $state(false);
   let error = $state(null);
   let loading = $state(false);
   let userLocation = $state(null);
@@ -24,6 +27,9 @@ export function createSessionStore() {
     missingFields = [];
     questions = [];
     results = [];
+    currentRecommendation = null;
+    candidatePool = [];
+    showFullPool = false;
     error = null;
     loading = false;
     userLocation = null;
@@ -48,7 +54,9 @@ export function createSessionStore() {
         (position) => {
           const loc = {
             lat: position.coords.latitude,
-            lng: position.coords.longitude
+            lng: position.coords.longitude,
+            accuracyMeters: position.coords.accuracy ?? null,
+            source: 'browser-geolocation'
           };
           userLocation = loc;
           resolve(loc);
@@ -116,7 +124,10 @@ export function createSessionStore() {
       const selectedLocationPayload =
         mode === 'travel' && selectedLocation
           ? {
-              coords: selectedLocation.coords,
+              coords: {
+                ...selectedLocation.coords,
+                source: 'selected-location'
+              },
               name: selectedLocation.name,
               address: selectedLocation.address
             }
@@ -210,6 +221,10 @@ export function createSessionStore() {
       sessionId = data.sessionId;
       status = 'results';
       results = data.results || [];
+      currentRecommendation = data.currentRecommendation || results[0] || null;
+      candidatePool = data.candidatePool || results;
+      showFullPool = Boolean(data.showFullPool);
+      activeResultIndex = 0;
     } else if (data.status === 'error') {
       error = {
         code: data.code,
@@ -217,6 +232,40 @@ export function createSessionStore() {
         missingFields: data.missingFields || []
       };
       status = 'error';
+    }
+  }
+
+  async function submitFeedback(action, candidateId) {
+    if (!sessionId || !candidateId) return;
+    loading = true;
+    error = null;
+
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, candidateId })
+      });
+
+      const data = await response.json();
+      if (response.ok || data.status) {
+        handleApiResponse(data);
+      } else {
+        error = {
+          code: data.code || 'PROVIDER_ERROR',
+          message: data.message || '피드백 제출에 실패했습니다.'
+        };
+        status = 'error';
+      }
+    } catch {
+      error = {
+        code: 'PROVIDER_ERROR',
+        message:
+          '서버와 통신하는 도중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
+      };
+      status = 'error';
+    } finally {
+      loading = false;
     }
   }
 
@@ -252,6 +301,24 @@ export function createSessionStore() {
       return questions;
     },
     get results() {
+      return results;
+    },
+    get currentRecommendation() {
+      return currentRecommendation;
+    },
+    get candidatePool() {
+      return candidatePool;
+    },
+    get showFullPool() {
+      return showFullPool;
+    },
+    get displayResults() {
+      if (showFullPool) {
+        return candidatePool;
+      }
+      if (currentRecommendation) {
+        return [currentRecommendation];
+      }
       return results;
     },
     get error() {
@@ -290,6 +357,7 @@ export function createSessionStore() {
     reset,
     searchLocation,
     submitQuery,
-    submitAnswers
+    submitAnswers,
+    submitFeedback
   };
 }

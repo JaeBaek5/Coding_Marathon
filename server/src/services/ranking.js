@@ -1,4 +1,5 @@
 import { ErrorCodes } from '../../../shared/contracts/schemas.js';
+import { isVenueAllowed } from '../utils/venueGating.js';
 
 export class RankingValidationError extends Error {
   constructor(message, code) {
@@ -156,7 +157,7 @@ function getCandidatePrice(candidate) {
  * @param {string} nowStr
  * @returns {Array} Up to 5 ranked candidates
  */
-export function rankCandidates(candidates, slot, nowStr) {
+export function rankCandidates(candidates, slot, nowStr, topN = 5) {
   const {
     totalTimeMinutes,
     transportMode,
@@ -184,6 +185,10 @@ export function rankCandidates(candidates, slot, nowStr) {
       candidate.oneWayRouteMinutes >= 0;
 
     if (!hasRoute) {
+      continue;
+    }
+
+    if (!isVenueAllowed(candidate, slot)) {
       continue;
     }
 
@@ -430,5 +435,8 @@ export function rankCandidates(candidates, slot, nowStr) {
     return (a.name || '').localeCompare(b.name || '', 'ko');
   });
 
-  return scoredCandidates.slice(0, 5);
+  const normalizedTopN =
+    Number.isInteger(topN) && topN > 0 ? topN : 5;
+
+  return scoredCandidates.slice(0, normalizedTopN);
 }

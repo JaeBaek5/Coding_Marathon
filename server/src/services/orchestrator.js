@@ -3,18 +3,11 @@ import {
   SlotPriorityOrder
 } from '../../../shared/contracts/schemas.js';
 import { sessions } from './sessions.js';
-import { KakaoLocalAdapter } from '../adapters/kakaoLocalAdapter.js';
-import { KakaoMobilityAdapter } from '../adapters/kakaoMobilityAdapter.js';
-import { NaverDirectionsAdapter } from '../adapters/naverDirectionsAdapter.js';
-import {
-  normalizeKakaoLocalCandidate,
-  mergeCandidateWithRoute
-} from '../adapters/normalization.js';
-import { deduplicateCandidates } from '../utils/dedupe.js';
-import { rankCandidates, validateTimeBudget } from './ranking.js';
-import { cache, cacheTTLs } from '../utils/cache.js';
 import { logger } from '../utils/logger.js';
 import { createAgentChatCompletion, getAgentHarness } from '../llm/client.js';
+import { bet as defaultBet } from '../agents/bet/index.js';
+import { gimel as defaultGimel } from '../agents/gimel/index.js';
+import { detectExplicitVenueIntent } from '../utils/venueGating.js';
 
 const QuestionLabels = {
   mode: '식사 모드를 선택해 주세요. (일반 모드 또는 출장/여행 모드)',
@@ -32,9 +25,71 @@ const QuestionLabels = {
 function getSearchRadius(mode, transportMode) {
   if (mode === 'normal') {
     return transportMode === 'walk' ? 1000 : 5000;
-  } else {
-    return transportMode === 'walk' ? 2000 : 10000;
   }
+
+  return transportMode === 'walk' ? 2000 : 10000;
+}
+
+function collectSlotTextSources(slots = {}, query = '') {
+  const sources = [query];
+  for (const value of Object.values(slots)) {
+    if (typeof value === 'string') {
+      sources.push(value);
+    } else if (Array.isArray(value)) {
+      sources.push(...value.filter((item) => typeof item === 'string'));
+    }
+  }
+  return sources;
+}
+
+function normalizeLocationPayload(location, fallbackSource = 'browser-geolocation') {
+  if (!location) {
+    return null;
+  }
+
+  return {
+    lat: location.lat,
+    lng: location.lng,
+    accuracyMeters:
+      location.accuracyMeters === undefined ? null : location.accuracyMeters,
+    source: location.source || fallbackSource
+  };
+}
+
+export function buildRecommendationPresentation(
+  candidatePool,
+  dislikedIds = [],
+  showFullPool = false
+) {
+  const available = candidatePool.filter(
+    (candidate) => !dislikedIds.includes(candidate.id)
+  );
+  const currentRecommendation = available[0] || null;
+
+  if (showFullPool) {
+    return {
+      currentRecommendation,
+      candidatePool,
+      results: candidatePool,
+      showFullPool: true
+    };
+  }
+
+  return {
+    currentRecommendation,
+    candidatePool,
+    results: currentRecommendation ? [currentRecommendation] : [],
+    showFullPool: false
+  };
+}
+
+function mapBetError(betResult) {
+  return {
+    status: 'error',
+    code: betResult.code,
+    message: betResult.message,
+    missingFields: []
+  };
 }
 
 export function parseQueryToSlotsRegex(query) {
@@ -270,6 +325,11 @@ export function generateGroundedExplanationFallback(candidate, slots) {
 }
 
 export class OrchestratorService {
+  constructor(dependencies = {}) {
+    this.bet = dependencies.bet ?? defaultBet;
+    this.gimel = dependencies.gimel ?? defaultGimel;
+  }
+
   async processRequest(requestPayload) {
     const {
       query,
@@ -302,20 +362,30 @@ export class OrchestratorService {
 
     const initialSlots = {
       mode,
-      ...parsedSlots
+      ...parsedSlots,
+      venueIntentExplicit: detectExplicitVenueIntent(
+        collectSlotTextSources(parsedSlots, query)
+      )
     };
 
     if (mode === 'normal' && userLocation) {
-      initialSlots.location = userLocation;
-    } else if (mode === 'travel' && selectedLocation?.coords) {
-      initialSlots.location = selectedLocation.coords;
+      initialSlots.location = normalizeLocationPayload(
+        userLocation,
+        'browser-geolocation'
+      );
+    } else if (mode === 'travel' && selectedLocation) {
+      const coords = selectedLocation.coords || selectedLocation;
+      initialSlots.location = normalizeLocationPayload(
+        coords,
+        selectedLocation.coords ? 'selected-location' : 'manual-location'
+      );
     }
 
     const missingFields = this.detectMissingFields(initialSlots);
 
     if (missingFields.length > 0) {
       const sessionId = `ses_${Math.random().toString(36).substring(2, 11)}`;
-      sessions.create(sessionId, initialSlots);
+      sessions.create(sessionId, { ...initialSlots, _query: query });
 
       const questions = missingFields.map((field) => ({
         field,
@@ -330,7 +400,7 @@ export class OrchestratorService {
       };
     }
 
-    return this.executeRecommendation(initialSlots, now);
+    return this.executeRecommendation(initialSlots, now, { query });
   }
 
   async processAnswers(sessionId, answersPayload) {
@@ -389,9 +459,59 @@ export class OrchestratorService {
       };
     }
 
-    const result = await this.executeRecommendation(updatedSlots, null);
+    const result = await this.executeRecommendation(updatedSlots, null, {
+      query: session.slots._query || ''
+    });
     sessions.delete(sessionId);
     return result;
+  }
+
+  async processFeedback(sessionId, feedbackPayload) {
+    const session = sessions.get(sessionId);
+    if (!session?.candidatePool?.length) {
+      return {
+        status: 'error',
+        code: ErrorCodes.SESSION_EXPIRED,
+        message: '세션이 만료되었거나 존재하지 않습니다.',
+        missingFields: []
+      };
+    }
+
+    const { action, candidateId } = feedbackPayload;
+    const likedIds = [...(session.likedIds || [])];
+    const dislikedIds = [...(session.dislikedIds || [])];
+    let dislikeCount = session.dislikeCount || 0;
+    let showFullPool = session.showFullPool || false;
+
+    if (action === 'like') {
+      if (!likedIds.includes(candidateId)) {
+        likedIds.push(candidateId);
+      }
+    } else if (!dislikedIds.includes(candidateId)) {
+      dislikedIds.push(candidateId);
+      dislikeCount += 1;
+      if (dislikeCount >= 2) {
+        showFullPool = true;
+      }
+    }
+
+    sessions.update(sessionId, {
+      likedIds,
+      dislikedIds,
+      dislikeCount,
+      showFullPool
+    });
+
+    return {
+      status: 'results',
+      sessionId,
+      eligibleCount: session.candidatePool.length,
+      ...buildRecommendationPresentation(
+        session.candidatePool,
+        dislikedIds,
+        showFullPool
+      )
+    };
   }
 
   detectMissingFields(slots) {
@@ -407,208 +527,37 @@ export class OrchestratorService {
     return missing;
   }
 
-  async executeRecommendation(slots, now) {
-    const { mode, transportMode, location, totalTimeMinutes } = slots;
+  async executeRecommendation(slots, now, options = {}) {
+    const query = options.query || '';
+    const enrichedSlots = {
+      ...slots,
+      venueIntentExplicit: detectExplicitVenueIntent(
+        collectSlotTextSources(slots, query)
+      )
+    };
 
-    try {
-      validateTimeBudget(totalTimeMinutes);
-    } catch (err) {
-      logger.info('Time budget validation failed', { totalTimeMinutes });
-      return {
-        status: 'error',
-        code: err.code || ErrorCodes.INVALID_TOTAL_TIME,
-        message: err.message,
-        missingFields: []
-      };
+    const betResult = await this.bet.search(enrichedSlots, { now });
+    if (betResult.status === 'error') {
+      return mapBetError(betResult);
     }
 
-    const kakaoLocal = new KakaoLocalAdapter();
-    const radius = getSearchRadius(mode, transportMode);
+    const candidatePool = await this.gimel.generateReasons(betResult.results);
+    const sessionId = `ses_${Math.random().toString(36).substring(2, 11)}`;
 
-    let searchResult;
-    const nearbyCacheKey = `nearby:${location.lat.toFixed(5)}:${location.lng.toFixed(5)}:${radius}`;
-    try {
-      const cached = cache.get(nearbyCacheKey);
-      if (cached) {
-        logger.info('Cache HIT for nearby restaurants', {
-          cacheKey: nearbyCacheKey
-        });
-        searchResult = cached;
-      } else {
-        logger.info('Cache MISS for nearby restaurants', {
-          cacheKey: nearbyCacheKey
-        });
-        logger.info('Provider Call: Kakao Local category search', {
-          lat: location.lat,
-          lng: location.lng,
-          radius
-        });
-        searchResult = await kakaoLocal.searchNearbyRestaurants(
-          location.lat,
-          location.lng,
-          radius
-        );
-        cache.set(nearbyCacheKey, searchResult, cacheTTLs.NEARBY);
-      }
-    } catch (err) {
-      logger.error('Provider Error: Kakao Local category search failed', err, {
-        location,
-        radius
-      });
-      return {
-        status: 'error',
-        code: ErrorCodes.PROVIDER_ERROR,
-        message: '식당 검색에 실패했습니다.',
-        missingFields: []
-      };
-    }
-
-    const rawDocs = searchResult?.documents || [];
-    logger.info('Restaurant candidates found', {
-      rawCandidatesCount: rawDocs.length
+    sessions.create(sessionId, enrichedSlots);
+    sessions.update(sessionId, {
+      candidatePool,
+      likedIds: [],
+      dislikedIds: [],
+      dislikeCount: 0,
+      showFullPool: false
     });
-    if (rawDocs.length === 0) {
-      return {
-        status: 'results',
-        sessionId: '',
-        eligibleCount: 0,
-        results: []
-      };
-    }
-
-    const normalizedCandidates = rawDocs
-      .slice(0, 20)
-      .map((doc) => normalizeKakaoLocalCandidate(doc));
-    const deduped = deduplicateCandidates(normalizedCandidates).slice(0, 15);
-    logger.info('Candidates after normalization and deduplication', {
-      dedupedCandidatesCount: deduped.length
-    });
-
-    const walkingAdapter = new KakaoMobilityAdapter();
-    const drivingAdapter = new NaverDirectionsAdapter();
-
-    const candidatesWithRoutes = [];
-
-    for (const candidate of deduped) {
-      const routeCacheKey = `route:${transportMode}:${location.lat.toFixed(5)}:${location.lng.toFixed(5)}:${candidate.location.lat.toFixed(5)}:${candidate.location.lng.toFixed(5)}`;
-      try {
-        let route;
-        const cachedRoute = cache.get(routeCacheKey);
-        if (cachedRoute) {
-          logger.info('Cache HIT for route summary', { routeCacheKey });
-          route = cachedRoute;
-        } else {
-          logger.info('Cache MISS for route summary', { routeCacheKey });
-          if (transportMode === 'walk') {
-            logger.info('Provider Call: Kakao Mobility walking route', {
-              start: location,
-              goal: candidate.location
-            });
-            const rawRoute = await walkingAdapter.getWalkingRoute(
-              location.lat,
-              location.lng,
-              candidate.location.lat,
-              candidate.location.lng
-            );
-            route = {
-              durationMinutes: Math.round(
-                rawRoute.routes[0].summary.duration / 60
-              ),
-              distanceMeters: Math.round(rawRoute.routes[0].summary.distance),
-              path: []
-            };
-            if (rawRoute.routes[0].sections?.[0]?.roads) {
-              for (const road of rawRoute.routes[0].sections[0].roads) {
-                if (road.vertexes) {
-                  for (let i = 0; i < road.vertexes.length; i += 2) {
-                    route.path.push({
-                      lng: road.vertexes[i],
-                      lat: road.vertexes[i + 1]
-                    });
-                  }
-                }
-              }
-            }
-          } else {
-            logger.info('Provider Call: NAVER Directions driving route', {
-              start: location,
-              goal: candidate.location
-            });
-            const rawRoute = await drivingAdapter.getDrivingRoute(
-              location.lat,
-              location.lng,
-              candidate.location.lat,
-              candidate.location.lng
-            );
-            route = {
-              durationMinutes: Math.round(
-                rawRoute.route.trafast[0].summary.duration / 1000 / 60
-              ),
-              distanceMeters: Math.round(
-                rawRoute.route.trafast[0].summary.distance
-              ),
-              path: rawRoute.route.trafast[0].path.map((coord) => ({
-                lng: coord[0],
-                lat: coord[1]
-              }))
-            };
-          }
-          cache.set(routeCacheKey, route, cacheTTLs.ROUTE);
-        }
-
-        const merged = mergeCandidateWithRoute(candidate, route, transportMode);
-        candidatesWithRoutes.push(merged);
-      } catch (err) {
-        logger.error('Provider Error: Route summary calculation failed', err, {
-          candidateName: candidate.name,
-          transportMode
-        });
-      }
-    }
-
-    logger.info('Candidates with successfully computed routes', {
-      routedCandidatesCount: candidatesWithRoutes.length
-    });
-
-    if (candidatesWithRoutes.length === 0) {
-      return {
-        status: 'error',
-        code: ErrorCodes.ROUTE_UNAVAILABLE,
-        message: '경로 탐색에 실패했습니다.',
-        missingFields: []
-      };
-    }
-
-    const ranked = rankCandidates(candidatesWithRoutes, slots, now);
-    logger.info('Candidates after deterministic ranking and filtering', {
-      rankedCandidatesCount: ranked.length
-    });
-
-    ranked.forEach((item, index) => {
-      logger.info(`Ranking breakdown for rank #${index + 1}`, {
-        id: item.id,
-        name: item.name,
-        scoreTotal: item.scoreTotal,
-        scoreComponents: item.scoreComponents,
-        totalExpectedMinutes: item.totalExpectedMinutes,
-        confidenceBadge: item.confidenceBadge
-      });
-    });
-
-    const finalResults = [];
-    for (const item of ranked) {
-      const reason = await generateGroundedExplanationLLM(item, slots);
-      finalResults.push({
-        ...item,
-        reason
-      });
-    }
 
     return {
       status: 'results',
-      sessionId: '',
-      eligibleCount: finalResults.length,
-      results: finalResults
+      sessionId,
+      eligibleCount: candidatePool.length,
+      ...buildRecommendationPresentation(candidatePool, [], false)
     };
   }
 }

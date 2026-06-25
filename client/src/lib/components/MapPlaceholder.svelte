@@ -132,12 +132,12 @@
   }
 
   function renderResultMarkers() {
-    if (!mapInstance || !session.results?.length) return;
+    if (!mapInstance || !session.displayResults?.length) return;
 
     for (const m of resultMarkers) m.setMap(null);
     resultMarkers = [];
 
-    session.results.forEach((item, i) => {
+    session.displayResults.forEach((item, i) => {
       const isActive = session.activeResultIndex === i;
       const position = new window.naver.maps.LatLng(item.location.lat, item.location.lng);
 
@@ -171,7 +171,7 @@
       activeInfoWindow = null;
     }
 
-    const activeItem = session.results[session.activeResultIndex];
+    const activeItem = session.displayResults[session.activeResultIndex];
     if (!activeItem) return;
 
     if (activeItem.path && activeItem.path.length > 1) {
@@ -224,7 +224,8 @@
   }
 
   $effect(() => {
-    session.results;
+    session.displayResults;
+    session.showFullPool;
     if (mapInitialized) {
       renderResultMarkers();
       renderActiveRoute();

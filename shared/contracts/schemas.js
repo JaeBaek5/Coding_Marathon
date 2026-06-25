@@ -106,9 +106,20 @@ export const SlotSchema = z.object({
 export const RecommendationRequestSchema = z.object({
   query: z.string().min(1, 'Query is required'),
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]).default(Mode.NORMAL),
-  userLocation: CoordinateSchema.optional().nullable(),
+  userLocation: z
+    .union([LocationPayloadSchema, CoordinateSchema])
+    .optional()
+    .nullable(),
   selectedLocation: z
-    .union([CoordinateSchema, z.object({ coords: CoordinateSchema })])
+    .union([
+      LocationPayloadSchema,
+      CoordinateSchema,
+      z.object({
+        coords: z.union([LocationPayloadSchema, CoordinateSchema]),
+        name: z.string().optional(),
+        address: z.string().optional()
+      })
+    ])
     .optional()
     .nullable(),
   now: z.string().datetime({ offset: true }).optional().nullable()
@@ -116,6 +127,11 @@ export const RecommendationRequestSchema = z.object({
 
 export const AnswersRequestSchema = z.object({
   answers: z.record(z.any())
+});
+
+export const FeedbackRequestSchema = z.object({
+  action: z.enum(['like', 'dislike']),
+  candidateId: z.string().min(1)
 });
 
 export const NormalizedRouteSchema = z.object({

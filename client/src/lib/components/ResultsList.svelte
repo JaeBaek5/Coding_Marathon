@@ -1,18 +1,32 @@
 <script>
   const { session } = $props();
+
+  const visibleResults = $derived(
+    session.showFullPool
+      ? session.candidatePool
+      : session.currentRecommendation
+        ? [session.currentRecommendation]
+        : session.results
+  );
 </script>
 
 <div class="results-list-container">
   <div class="results-header">
     <h2 class="title">추천 식당</h2>
-    <p class="subtitle">조건에 맞는 최적의 식당 {session.results.length}곳을 찾았습니다.</p>
+    {#if session.showFullPool}
+      <p class="subtitle">
+        조건에 맞는 식당 {session.candidatePool.length}곳을 모두 보여드립니다.
+      </p>
+    {:else}
+      <p class="subtitle">조건에 맞는 최적의 식당을 1곳 추천합니다.</p>
+    {/if}
   </div>
 
   <div class="results-grid">
-    {#each session.results as item, i}
-      <div 
+    {#each visibleResults as item, i}
+      <div
         class="result-card card {session.activeResultIndex === i ? 'active' : ''}"
-        onclick={() => session.activeResultIndex = i}
+        onclick={() => (session.activeResultIndex = i)}
         onkeydown={(e) => e.key === 'Enter' && (session.activeResultIndex = i)}
         role="button"
         tabindex="0"
@@ -53,6 +67,17 @@
           </div>
         {/if}
 
+        {#if item.reviewSummary?.pros || item.reviewSummary?.cons}
+          <div class="review-summary card-bone">
+            {#if item.reviewSummary?.pros}
+              <p class="review-line"><span class="review-label">장점</span>{item.reviewSummary.pros}</p>
+            {/if}
+            {#if item.reviewSummary?.cons}
+              <p class="review-line"><span class="review-label">단점</span>{item.reviewSummary.cons}</p>
+            {/if}
+          </div>
+        {/if}
+
         <div class="card-footer">
           <div class="badges-row">
             {#if item.confidenceBadge}
@@ -68,6 +93,31 @@
           </div>
           <span class="attribution">{item.providerAttribution}</span>
         </div>
+
+        {#if !session.showFullPool}
+          <div class="feedback-row">
+            <button
+              type="button"
+              class="button-outline feedback-btn"
+              onclick={(event) => {
+                event.stopPropagation();
+                session.submitFeedback('like', item.id);
+              }}
+            >
+              좋아요
+            </button>
+            <button
+              type="button"
+              class="button-primary feedback-btn"
+              onclick={(event) => {
+                event.stopPropagation();
+                session.submitFeedback('dislike', item.id);
+              }}
+            >
+              싫어요
+            </button>
+          </div>
+        {/if}
       </div>
     {/each}
   </div>
@@ -180,7 +230,8 @@
     border: 1px solid var(--color-hairline);
   }
 
-  .info-item, .info-itemhighlighted {
+  .info-item,
+  .info-itemhighlighted {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -204,23 +255,32 @@
     color: var(--color-ink);
   }
 
-  .recommendation-reason {
+  .recommendation-reason,
+  .review-summary {
     display: flex;
     flex-direction: column;
     gap: 4px;
     padding: var(--spacing-md);
   }
 
-  .reason-title {
+  .reason-title,
+  .review-label {
     font-size: 12px;
     font-weight: 700;
     color: var(--color-primary);
   }
 
-  .reason-text {
+  .reason-text,
+  .review-line {
     font-size: 14px;
     color: var(--color-body);
     line-height: 1.5;
+  }
+
+  .review-line {
+    display: flex;
+    gap: var(--spacing-xs);
+    align-items: flex-start;
   }
 
   .card-footer {
@@ -241,6 +301,17 @@
     font-family: var(--font-mono);
     font-size: 10px;
     color: var(--color-ash);
+  }
+
+  .feedback-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .feedback-btn {
+    width: 100%;
+    height: 44px;
   }
 
   .confidence-high {

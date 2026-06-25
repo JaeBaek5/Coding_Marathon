@@ -61,7 +61,32 @@ test.describe('Mumuk Results UI', () => {
         body: JSON.stringify({
           status: 'results',
           sessionId: 'test-session-results',
-          results: [
+          eligibleCount: 2,
+          currentRecommendation: {
+            id: '1',
+            name: 'First Restaurant',
+            category: 'Korean',
+            address: 'Address 1',
+            location: { lat: 37.5, lng: 127.1 },
+            path: [
+              { lat: 37.4979, lng: 127.0276 },
+              { lat: 37.5, lng: 127.1 }
+            ],
+            priceLevel: null,
+            openingHours: null,
+            rating: null,
+            reviewCount: null,
+            reviewSummary: null,
+            transportMode: 'walk',
+            oneWayRouteMinutes: 10,
+            totalExpectedMinutes: 50,
+            distanceMeters: 800,
+            confidenceBadge: 'high',
+            reason: 'Great place for lunch.',
+            providerAttribution: 'Kakao Local',
+            openStatus: true
+          },
+          candidatePool: [
             {
               id: '1',
               name: 'First Restaurant',
@@ -110,7 +135,34 @@ test.describe('Mumuk Results UI', () => {
               providerAttribution: 'Kakao Local',
               openStatus: null
             }
-          ]
+          ],
+          results: [
+            {
+              id: '1',
+              name: 'First Restaurant',
+              category: 'Korean',
+              address: 'Address 1',
+              location: { lat: 37.5, lng: 127.1 },
+              path: [
+                { lat: 37.4979, lng: 127.0276 },
+                { lat: 37.5, lng: 127.1 }
+              ],
+              priceLevel: null,
+              openingHours: null,
+              rating: null,
+              reviewCount: null,
+              reviewSummary: null,
+              transportMode: 'walk',
+              oneWayRouteMinutes: 10,
+              totalExpectedMinutes: 50,
+              distanceMeters: 800,
+              confidenceBadge: 'high',
+              reason: 'Great place for lunch.',
+              providerAttribution: 'Kakao Local',
+              openStatus: true
+            }
+          ],
+          showFullPool: false
         })
       });
     });
@@ -161,34 +213,24 @@ test.describe('Mumuk Results UI', () => {
 
     const subtitle = page.locator('.results-header .subtitle');
     await expect(subtitle).toBeVisible();
-    await expect(subtitle).toContainText('2곳을 찾았');
+    await expect(subtitle).toContainText('1곳 추천');
 
     const resultCards = page.locator('.result-card');
-    await expect(resultCards).toHaveCount(2);
+    await expect(resultCards).toHaveCount(1);
 
-    // Verify grounded reason rendering
     const firstReason = resultCards.nth(0).locator('.reason-text');
     await expect(firstReason).toHaveText('Great place for lunch.');
-    const secondReason = resultCards.nth(1).locator('.reason-text');
-    await expect(secondReason).toHaveText('Good pasta.');
+
+    const likeButton = page.locator('.feedback-btn', { hasText: '좋아요' });
+    await expect(likeButton).toBeVisible();
+    const dislikeButton = page.locator('.feedback-btn', { hasText: '싫어요' });
+    await expect(dislikeButton).toBeVisible();
 
     // Verify null field hiding (openStatus is null for second, should not render)
     const firstStatusBadge = resultCards
       .nth(0)
       .locator('.badge-tag[class*="status-"]');
     await expect(firstStatusBadge).toBeVisible();
-    const secondStatusBadge = resultCards
-      .nth(1)
-      .locator('.badge-tag[class*="status-"]');
-    await expect(secondStatusBadge).toHaveCount(0); // Should not exist
-
-    // Map selection sync check
-    // Active class syncs
-    await expect(resultCards.nth(0)).toHaveClass(/active/);
-
-    await resultCards.nth(1).click();
-    await expect(resultCards.nth(1)).toHaveClass(/active/);
-    await expect(resultCards.nth(0)).not.toHaveClass(/active/);
 
     // Check map initialized (basic test that the fake SDK executed)
     const mapPlaceholder = page.locator('.map-placeholder');

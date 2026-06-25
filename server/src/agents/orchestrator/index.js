@@ -3,6 +3,7 @@ export {
   orchestrator,
   parseQueryToSlotsRegex,
   parseQueryToSlotsLLM,
-  generateGroundedExplanationFallback
+  generateGroundedExplanationFallback,
+  buildRecommendationPresentation
 } from '../../services/orchestrator.js';
 export { orchestrator as default } from '../../services/orchestrator.js';

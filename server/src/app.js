@@ -8,7 +8,8 @@ import { normalizeKakaoKeywordLocation } from './adapters/normalization.js';
 import {
   ErrorCodes,
   RecommendationRequestSchema,
-  AnswersRequestSchema
+  AnswersRequestSchema,
+  FeedbackRequestSchema
 } from '../../shared/contracts/schemas.js';
 import { cache, cacheTTLs } from './utils/cache.js';
 import { logger, loggerMiddleware } from './utils/logger.js';
@@ -221,6 +222,41 @@ app.post('/api/sessions/:sessionId/answers', async (req, res) => {
       status: 'error',
       code: ErrorCodes.PROVIDER_ERROR,
       message: '답변 처리에 실패했습니다.',
+      missingFields: []
+    });
+  }
+});
+
+app.post('/api/sessions/:sessionId/feedback', async (req, res) => {
+  const { sessionId } = req.params;
+  const parseResult = FeedbackRequestSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({
+      status: 'error',
+      code: ErrorCodes.INVALID_TOTAL_TIME,
+      message: parseResult.error.errors.map((e) => e.message).join(', '),
+      missingFields: []
+    });
+  }
+
+  try {
+    const result = await orchestrator.processFeedback(
+      sessionId,
+      parseResult.data
+    );
+    if (result.status === 'error') {
+      return res.status(mapErrorCodeToStatus(result.code)).json(result);
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    logger.error('Feedback processing failed', err, {
+      requestId: req.id,
+      sessionId
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: ErrorCodes.PROVIDER_ERROR,
+      message: '피드백 처리에 실패했습니다.',
       missingFields: []
     });
   }

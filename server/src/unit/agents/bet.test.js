@@ -233,4 +233,36 @@ describe('Bet Agent Unit', () => {
       'candidate-6'
     );
   });
+
+  it('excludes cafes and bars unless the slot bundle explicitly allows them', async () => {
+    const logger = createLogger();
+    const agent = new BetAgent({
+      searchNearbyCandidates: vi.fn().mockResolvedValue([
+        createCandidate({ id: 'restaurant-1', name: '든든한국밥', category: '한식' }),
+        createCandidate({ id: 'cafe-1', name: '모닝커피', category: '카페' }),
+        createCandidate({ id: 'bar-1', name: '즐거운술집', category: '술집' })
+      ]),
+      getWalkingRoute: vi.fn().mockResolvedValue(createRoute(5, 400)),
+      logger
+    });
+
+    const defaultResult = await agent.search(
+      createSlots({ venueIntentExplicit: false }),
+      { now: '2026-05-20T12:00:00+09:00' }
+    );
+
+    expect(defaultResult.status).toBe('results');
+    expect(defaultResult.results.map((item) => item.id)).toEqual(['restaurant-1']);
+
+    const explicitResult = await agent.search(
+      createSlots({ venueIntentExplicit: true }),
+      { now: '2026-05-20T12:00:00+09:00' }
+    );
+
+    expect(explicitResult.results.map((item) => item.id)).toEqual([
+      'restaurant-1',
+      'cafe-1',
+      'bar-1'
+    ]);
+  });
 });

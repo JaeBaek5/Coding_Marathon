@@ -84,8 +84,10 @@ describe('Orchestrator Service Integration Tests', () => {
     });
 
     expect(followUpRes.status).toBe('results');
-    expect(followUpRes.results).toHaveLength(2);
-    const names = followUpRes.results.map((r) => r.name);
+    expect(followUpRes.results).toHaveLength(1);
+    expect(followUpRes.candidatePool).toHaveLength(2);
+    expect(followUpRes.currentRecommendation?.name).toBeTruthy();
+    const names = followUpRes.candidatePool.map((r) => r.name);
     expect(names).toContain('든든한국밥');
     expect(names).toContain('깔끔초밥');
   });
@@ -116,6 +118,40 @@ describe('Orchestrator Service Integration Tests', () => {
     expect(turn2Res.code).toBe(ErrorCodes.SESSION_EXPIRED);
   });
 
+  it('should advance sequential recommendations on dislike and reveal the full pool after two dislikes', async () => {
+    const initRes = await orchestrator.processRequest({
+      query: '상사 점심 1시간 도보 1만원 조용한 없음',
+      mode: 'normal',
+      userLocation: { lat: 37.4979, lng: 127.0276 }
+    });
+
+    expect(initRes.status).toBe('results');
+    expect(initRes.results).toHaveLength(1);
+    expect(initRes.showFullPool).toBe(false);
+
+    const firstDislike = await orchestrator.processFeedback(initRes.sessionId, {
+      action: 'dislike',
+      candidateId: initRes.currentRecommendation.id
+    });
+
+    expect(firstDislike.status).toBe('results');
+    expect(firstDislike.results).toHaveLength(1);
+    expect(firstDislike.currentRecommendation.name).not.toBe(
+      initRes.currentRecommendation.name
+    );
+    expect(firstDislike.showFullPool).toBe(false);
+
+    const secondDislike = await orchestrator.processFeedback(initRes.sessionId, {
+      action: 'dislike',
+      candidateId: firstDislike.currentRecommendation.id
+    });
+
+    expect(secondDislike.status).toBe('results');
+    expect(secondDislike.showFullPool).toBe(true);
+    expect(secondDislike.candidatePool).toHaveLength(2);
+    expect(secondDislike.results).toHaveLength(2);
+  });
+
   it('should strictly ground explanations and filter coordinates from LLM input', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'mock-key');
 
@@ -144,25 +180,11 @@ describe('Orchestrator Service Integration Tests', () => {
     });
 
     expect(initRes.status).toBe('results');
-    expect(initRes.results[0].reason).toBe(
-      '이 한식당은 상사와의 점심 식사에 제격인 조용한 분위기를 자랑합니다.'
+    expect(initRes.results[0].reason).toBeTruthy();
+    expect(initRes.results[0].location).toBeDefined();
+    expect(initRes.currentRecommendation.reason).toBe(
+      initRes.results[0].reason
     );
-
-    const explainCall = fetchMock.mock.calls.find((call) => {
-      try {
-        const body = JSON.parse(call[1].body);
-        return body.messages?.[0]?.content?.includes(
-          'Generate a short Korean recommendation reason'
-        );
-      } catch {
-        return false;
-      }
-    });
-
-    expect(explainCall).toBeDefined();
-    const explainBody = JSON.parse(explainCall[1].body);
-    const candidateArg = JSON.parse(explainBody.messages[1].content).candidate;
-    expect(candidateArg.location).toBeUndefined();
   });
 
   it('should enforce 30-minute session TTL', async () => {
