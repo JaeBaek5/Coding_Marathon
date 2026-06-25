@@ -14,25 +14,35 @@ mock 없음 — Overpass/Naver/IP 모두 실제 호출. 실패 시 에러를 그
 """
 
 import os
+import sys
 import time
 import math
 import json
 import re
 import datetime as dt
 
+_POC_DIR = os.path.dirname(os.path.abspath(__file__))
+if _POC_DIR not in sys.path:
+    sys.path.insert(0, _POC_DIR)
+
 import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+from llm_roles import load_role_specs, role_summary_line, validate_role_specs
+
+load_dotenv(os.path.join(_POC_DIR, ".env"))
 
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID", "").strip()          # NCP: 길찾기/역지오코딩
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "").strip()
 NAVER_SEARCH_ID = os.getenv("NAVER_SEARCH_ID", "").strip()          # developers.naver.com: 지역검색
 NAVER_SEARCH_SECRET = os.getenv("NAVER_SEARCH_SECRET", "").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6").strip()
-OPENROUTER_VISION_MODEL = (os.getenv("OPENROUTER_VISION_MODEL") or os.getenv("MODEL") or "anthropic/claude-sonnet-4.5").strip()
+ROLE_SPECS = load_role_specs()
+ROLE_WARNINGS = validate_role_specs(ROLE_SPECS)
+POC_MAX_ROUTE_CALLS = int(os.getenv("POC_MAX_ROUTE_CALLS", "4"))
+POC_MAX_VISION_CALLS = int(os.getenv("POC_MAX_VISION_CALLS", "1"))
+POC_ENABLE_VISION = os.getenv("POC_ENABLE_VISION", "true").strip().lower() in ("1", "true", "yes")
 
 HTTP_TIMEOUT = 15
 UA = {"User-Agent": "mumuk-poc/0.1", "Accept": "application/json"}
@@ -360,6 +370,26 @@ def _strip_json_fence(text):
     return re.sub(r"^```(?:json)?|```$", "", str(text or "").strip(), flags=re.MULTILINE).strip()
 
 
+def _openrouter_chat(role_name, messages):
+    """역할별 모델 규칙에 따라 OpenRouter 호출. role_name: reason | vision_menu"""
+    spec = ROLE_SPECS[role_name]
+    payload = {
+        "model": spec.model,
+        "max_tokens": spec.max_tokens,
+        "temperature": spec.temperature,
+        "messages": messages,
+    }
+    r = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+        json=payload,
+        timeout=spec.timeout_sec,
+    )
+    if not r.ok:
+        raise RuntimeError(f"{spec.label} 실패 {r.status_code}: {r.text[:200]}")
+    return r.json()["choices"][0]["message"]["content"].strip()
+
+
 def extract_menu_from_photo(image_url):
     if not image_url:
         return []
@@ -367,36 +397,26 @@ def extract_menu_from_photo(image_url):
         log("VISION", "OPENROUTER_API_KEY 없음 — 메뉴판 Vision 추출 스킵")
         return []
 
-    log("VISION", f"메뉴판 Vision 추출 [{OPENROUTER_VISION_MODEL}]")
-    payload = {
-        "model": OPENROUTER_VISION_MODEL,
-        "max_tokens": 1024,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        "이 메뉴판 사진을 읽고 메뉴 이름과 가격을 추출해줘. "
-                        '다른 말 없이 JSON 배열로만 답해: [{"name":"메뉴명","price":"가격"}, ...]. '
-                        "가격이 안 보이면 price를 null로, 글자를 읽을 수 없으면 []를 반환해."
-                    ),
-                },
-                {"type": "image_url", "image_url": {"url": image_url}},
-            ],
-        }],
-    }
+    spec = ROLE_SPECS["vision_menu"]
+    log("VISION", f"역할={spec.name} · {role_summary_line(spec)}")
     try:
-        r = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-            json=payload,
-            timeout=45,
+        text = _openrouter_chat(
+            "vision_menu",
+            [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "이 메뉴판 사진을 읽고 메뉴 이름과 가격을 추출해줘. "
+                            '다른 말 없이 JSON 배열로만 답해: [{"name":"메뉴명","price":"가격"}, ...]. '
+                            "가격이 안 보이면 price를 null로, 글자를 읽을 수 없으면 []를 반환해."
+                        ),
+                    },
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            }],
         )
-        if not r.ok:
-            log("VISION", f"Vision 실패 {r.status_code}: {r.text[:160]}", level="error")
-            return []
-        text = r.json()["choices"][0]["message"]["content"]
         items = json.loads(_strip_json_fence(text))
         if not isinstance(items, list):
             return []
@@ -421,7 +441,7 @@ def save_place_data(place_id, data):
     return path
 
 
-def enrich_with_naver_place(c):
+def enrich_with_naver_place(c, run_vision=True):
     place_id = resolve_place_id(c["name"], c.get("address", ""))
     if not place_id:
         c["place_details"] = None
@@ -430,7 +450,15 @@ def enrich_with_naver_place(c):
 
     reviews = fetch_naver_reviews(place_id)
     photos = fetch_naver_photos(place_id, store_name=c["name"])
-    menu_items = extract_menu_from_photo(photos.get("menu_board")) or photos.get("menu_items", [])
+    menu_items = []
+    if run_vision and POC_ENABLE_VISION:
+        menu_items = extract_menu_from_photo(photos.get("menu_board")) or photos.get("menu_items", [])
+    else:
+        menu_items = photos.get("menu_items", [])
+        if not run_vision:
+            log("VISION", f"{c['name']} — Vision 호출 제한(POC_MAX_VISION_CALLS)으로 스킵")
+        elif not POC_ENABLE_VISION:
+            log("VISION", "POC_ENABLE_VISION=false — 메뉴판 Vision 추출 스킵")
     place_url = f"https://m.place.naver.com/restaurant/{place_id}/home"
 
     details = {
@@ -627,11 +655,12 @@ def reason_fallback(c, transport):
 def reason_llm(c, transport):
     if not OPENROUTER_API_KEY:
         return reason_fallback(c, transport)
-    log("LLM", f"추천 이유 생성 [{OPENROUTER_MODEL}] → {c['name']}")
-    payload = {
-        "model": OPENROUTER_MODEL,
-        "messages": [
-            {
+    spec = ROLE_SPECS["reason"]
+    log("LLM", f"역할={spec.name} · {role_summary_line(spec)} → {c['name']}")
+    try:
+        txt = _openrouter_chat(
+            "reason",
+            [{
                 "role": "user",
                 "content": (
                     "다음 식당을 한국어 1~2문장으로 추천하는 이유를 써줘. 제공된 사실만 사용하고 "
@@ -651,19 +680,8 @@ def reason_llm(c, transport):
                         ensure_ascii=False,
                     )
                 ),
-            }
-        ],
-    }
-    try:
-        r = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-            json=payload, timeout=30,
+            }],
         )
-        if not r.ok:
-            log("LLM", f"실패 {r.status_code} — 폴백 사용", r.text[:200], level="error")
-            return reason_fallback(c, transport)
-        txt = r.json()["choices"][0]["message"]["content"].strip()
         log("LLM", f"  → {c['name']} 이유 생성 완료")
         return txt or reason_fallback(c, transport)
     except Exception as e:  # noqa: BLE001
@@ -693,7 +711,18 @@ def collect_candidates(source, lat, lng, radius):
     return [normalize_candidate(e) for e in els]
 
 
-def run_pipeline(loc, mode, transport, budget_minutes, top_n, use_llm, source="naver", max_route_calls=8):
+def run_pipeline(
+    loc,
+    mode,
+    transport,
+    budget_minutes,
+    top_n,
+    use_llm,
+    source="naver",
+    max_route_calls=None,
+):
+    if max_route_calls is None:
+        max_route_calls = POC_MAX_ROUTE_CALLS
     radius = search_radius(mode, transport)
     log("PIPELINE", f"시작 — source={source}, mode={mode}, transport={transport}, budget={budget_minutes}분, 위치={loc}")
 
@@ -720,7 +749,7 @@ def run_pipeline(loc, mode, transport, budget_minutes, top_n, use_llm, source="n
     ranked = rank(routed, budget_minutes)[:top_n]
     for i, c in enumerate(ranked, 1):
         log("RANK", f"#{i} {c['name']} — score={c['score']}, 총 {c['total_expected_min']}분")
-        enrich_with_naver_place(c)
+        enrich_with_naver_place(c, run_vision=(i <= POC_MAX_VISION_CALLS))
         c["reason"] = reason_llm(c, transport) if use_llm else reason_fallback(c, transport)
 
     log("PIPELINE", f"완료 — 최종 {len(ranked)}개")
@@ -740,7 +769,24 @@ def main():
     c1.metric("Naver검색", "OK" if (NAVER_SEARCH_ID and NAVER_SEARCH_SECRET) else "없음")
     c2.metric("Naver길찾기/지오", "OK" if (NAVER_CLIENT_ID and NAVER_CLIENT_SECRET) else "없음")
     c3.metric("Overpass", "폴백")
-    c4.metric("LLM", "OK" if OPENROUTER_API_KEY else "폴백")
+    if OPENROUTER_API_KEY:
+        c4.metric("LLM", ROLE_SPECS["reason"].model.split("/")[-1])
+    else:
+        c4.metric("LLM", "폴백")
+
+    if OPENROUTER_API_KEY:
+        with st.expander("🤖 모델 역할 규칙", expanded=False):
+            for role in ("reason", "vision_menu"):
+                spec = ROLE_SPECS[role]
+                st.markdown(f"**{spec.label}** (`{spec.name}`)")
+                st.caption(spec.description)
+                st.code(f"model={spec.model}\nmax_tokens={spec.max_tokens}\ntemperature={spec.temperature}")
+            for warn in ROLE_WARNINGS:
+                st.warning(warn)
+        st.caption(
+            f"제한: 경로 {POC_MAX_ROUTE_CALLS}회 · Vision {POC_MAX_VISION_CALLS}곳"
+            + ("" if POC_ENABLE_VISION else " · Vision OFF")
+        )
 
     st.divider()
     st.subheader("1. 위치")
