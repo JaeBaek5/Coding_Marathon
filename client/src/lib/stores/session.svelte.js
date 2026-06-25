@@ -48,14 +48,16 @@ export function createSessionStore() {
     activeResultIndex = 0;
   }
 
-  async function getGeolocation() {
+  async function getGeolocation({ silent = false } = {}) {
     if (!navigator.geolocation) {
-      error = {
-        code: 'UNSUPPORTED_BROWSER',
-        message:
-          '이 브라우저는 위치 권한 API를 지원하지 않습니다. 수동 위치 선택으로 진행하세요.'
-      };
-      status = 'error';
+      if (!silent) {
+        error = {
+          code: 'UNSUPPORTED_BROWSER',
+          message:
+            '이 브라우저는 위치 권한 API를 지원하지 않습니다. 수동 위치 선택으로 진행하세요.'
+        };
+        status = 'error';
+      }
       return null;
     }
 
@@ -75,17 +77,23 @@ export function createSessionStore() {
           resolve(loc);
         },
         () => {
-          error = {
-            code: 'GEO_REQUIRED',
-            message:
-              '현재 위치 권한이 거부되어 추천을 시작할 수 없습니다. 이동/여행 모드로 전환해 수동으로 위치를 선택하세요.'
-          };
-          status = 'error';
+          if (!silent) {
+            error = {
+              code: 'GEO_REQUIRED',
+              message:
+                '현재 위치 권한이 거부되어 추천을 시작할 수 없습니다. 이동/여행 모드로 전환해 수동으로 위치를 선택하세요.'
+            };
+            status = 'error';
+          }
           resolve(null);
         },
         { timeout: 10000 }
       );
     });
+  }
+
+  function initializeLocation() {
+    getGeolocation({ silent: true });
   }
 
   async function searchLocation(keyword) {
@@ -355,6 +363,7 @@ export function createSessionStore() {
     },
     reset,
     switchToTravelMode,
+    initializeLocation,
     searchLocation,
     submitQuery,
     submitAnswers,
