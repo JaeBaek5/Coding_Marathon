@@ -35,31 +35,33 @@
 
 @layer tokens {
   :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.147 0.004 49.3);
+    /* Warm, appetizing base — a soft cream canvas with crisp white cards. */
+    --background: oklch(0.991 0.0045 70);
+    --foreground: oklch(0.21 0.014 52);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.147 0.004 49.3);
+    --card-foreground: oklch(0.21 0.014 52);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.147 0.004 49.3);
-    --primary: oklch(0.457 0.24 277.023);
-    --primary-foreground: oklch(0.962 0.018 272.314);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.96 0.002 17.2);
-    --muted-foreground: oklch(0.547 0.021 43.1);
-    --accent: oklch(0.457 0.24 277.023);
-    --accent-foreground: oklch(0.962 0.018 272.314);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.985 0.001 106.423);
-    --border: oklch(0.922 0.005 34.3);
-    --input: oklch(0.922 0.005 34.3);
-    --ring: oklch(0.714 0.014 41.2);
-    --chart-1: oklch(0.868 0.007 39.5);
-    --chart-2: oklch(0.547 0.021 43.1);
-    --chart-3: oklch(0.438 0.017 39.3);
-    --chart-4: oklch(0.367 0.016 35.7);
-    --chart-5: oklch(0.268 0.011 36.5);
-    --radius: 0.625rem;
+    --popover-foreground: oklch(0.21 0.014 52);
+    /* Ember / tomato-coral primary — sophisticated and food-forward. */
+    --primary: oklch(0.585 0.182 31);
+    --primary-foreground: oklch(0.99 0.012 70);
+    --secondary: oklch(0.972 0.008 68);
+    --secondary-foreground: oklch(0.3 0.02 45);
+    --muted: oklch(0.965 0.008 68);
+    --muted-foreground: oklch(0.53 0.022 47);
+    --accent: oklch(0.585 0.182 31);
+    --accent-foreground: oklch(0.99 0.012 70);
+    --destructive: oklch(0.585 0.2 27);
+    --destructive-foreground: oklch(0.99 0.01 70);
+    --border: oklch(0.905 0.008 66);
+    --input: oklch(0.895 0.009 66);
+    --ring: oklch(0.585 0.182 31);
+    --chart-1: oklch(0.585 0.182 31);
+    --chart-2: oklch(0.7 0.15 55);
+    --chart-3: oklch(0.62 0.13 151.6);
+    --chart-4: oklch(0.55 0.12 250);
+    --chart-5: oklch(0.5 0.08 300);
+    --radius: 0.875rem;
     --sidebar: oklch(0.986 0.002 67.8);
     --sidebar-foreground: oklch(0.147 0.004 49.3);
     --sidebar-primary: oklch(0.511 0.262 276.966);
@@ -98,12 +100,34 @@
     --color-badge-success: oklch(0.62 0.13 151.6);
     --color-ring-focus: color-mix(in oklch, var(--ring) 45%, transparent);
 
+    /* Layered, warm-tinted elevation. */
+    --shadow-color: 28 18% 28%;
+    --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.06);
+    --shadow-sm: 0 1px 3px hsl(var(--shadow-color) / 0.08),
+      0 1px 2px hsl(var(--shadow-color) / 0.04);
+    --shadow-md: 0 6px 16px hsl(var(--shadow-color) / 0.09),
+      0 2px 6px hsl(var(--shadow-color) / 0.06);
+    --shadow-lg: 0 16px 40px hsl(var(--shadow-color) / 0.13),
+      0 6px 12px hsl(var(--shadow-color) / 0.07);
+    --shadow-primary: 0 8px 20px
+      color-mix(in oklch, var(--primary) 38%, transparent);
+    --shadow-primary-sm: 0 3px 10px
+      color-mix(in oklch, var(--primary) 30%, transparent);
+
+    /* Soft brand glow used behind the hero. */
+    --glow-primary: radial-gradient(
+      60% 60% at 50% 0%,
+      color-mix(in oklch, var(--primary) 16%, transparent),
+      transparent 70%
+    );
+
     --rounded-none: 0px;
     --rounded-xs: calc(var(--radius) - 6px);
     --rounded-sm: calc(var(--radius) - 4px);
     --rounded-md: calc(var(--radius) - 2px);
     --rounded-lg: var(--radius);
-    --rounded-full: var(--radius);
+    --rounded-xl: calc(var(--radius) + 6px);
+    --rounded-full: 999px;
 
     --spacing-xxs: 2px;
     --spacing-xs: 4px;
@@ -114,9 +138,13 @@
     --spacing-xxl: 32px;
     --spacing-xxxl: 48px;
 
-    --font-display: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
-    --font-sans: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    --font-display: 'Pretendard Variable', Pretendard, 'Noto Sans KR',
+      system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic',
+      sans-serif;
+    --font-sans: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui,
+      -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular',
+      'Courier New', monospace;
   }
 }
 
@@ -128,7 +156,11 @@
     font-family: var(--font-sans);
     font-size: 16px;
     line-height: 1.5;
+    letter-spacing: -0.005em;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'ss01', 'cv01';
     overflow-x: hidden;
   }
 
@@ -140,23 +172,25 @@
   h6 {
     font-family: var(--font-display);
     font-weight: 700;
-    line-height: 1;
-    letter-spacing: -0.03em;
+    line-height: 1.15;
+    letter-spacing: -0.012em;
   }
 
   h1 {
     font-size: clamp(3rem, 8vw, 4.5rem);
-    letter-spacing: -0.04em;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.022em;
   }
 
   h2 {
     font-size: clamp(2rem, 5vw, 3rem);
-    letter-spacing: -0.03em;
+    letter-spacing: -0.018em;
   }
 
   h3 {
     font-size: clamp(1.5rem, 4vw, 2.25rem);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.012em;
   }
 
   code,
@@ -187,10 +221,12 @@
     text-align: center;
     user-select: none;
     transition:
-      background-color 0.15s ease,
-      border-color 0.15s ease,
-      color 0.15s ease,
-      opacity 0.15s ease;
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease,
+      box-shadow 0.18s ease,
+      transform 0.12s ease,
+      opacity 0.18s ease;
   }
 
   .button-primary {
@@ -198,14 +234,21 @@
     padding: 12px 24px;
     background-color: var(--primary);
     color: var(--primary-foreground);
-    border: 1px solid var(--primary);
+    border: 1px solid transparent;
+    box-shadow: var(--shadow-primary-sm);
     font-size: 16px;
   }
 
-  .button-primary:hover:not(:disabled),
+  .button-primary:hover:not(:disabled) {
+    background-color: color-mix(in oklch, var(--primary) 91%, black);
+    box-shadow: var(--shadow-primary);
+    transform: translateY(-1px);
+  }
+
   .button-primary:active:not(:disabled) {
-    background-color: color-mix(in oklch, var(--primary) 88%, black);
-    border-color: color-mix(in oklch, var(--primary) 88%, black);
+    background-color: color-mix(in oklch, var(--primary) 84%, black);
+    box-shadow: var(--shadow-primary-sm);
+    transform: translateY(0);
   }
 
   .button-primary:disabled {
@@ -222,24 +265,38 @@
     background-color: var(--foreground);
     color: var(--background);
     border: 1px solid var(--foreground);
+    box-shadow: var(--shadow-sm);
     font-size: 16px;
   }
 
   .button-dark:hover:not(:disabled) {
-    opacity: 0.9;
+    opacity: 0.92;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+
+  .button-dark:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
   }
 
   .button-outline {
     height: 44px;
     padding: 11px 23px;
-    background-color: var(--background);
+    background-color: var(--card);
     color: var(--foreground);
     border: 1px solid var(--border);
+    box-shadow: var(--shadow-xs);
     font-size: 16px;
   }
 
   .button-outline:hover:not(:disabled) {
     background-color: var(--secondary);
+    border-color: color-mix(in oklch, var(--border) 60%, var(--foreground));
+  }
+
+  .button-outline:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
   .button-ghost {
@@ -258,34 +315,47 @@
   .text-input {
     width: 100%;
     height: 44px;
-    padding: 12px 20px;
-    background-color: var(--background);
+    padding: 12px 18px;
+    background-color: var(--card);
     color: var(--foreground);
     font-family: var(--font-sans);
     font-size: 16px;
     border: 1px solid var(--input);
     border-radius: var(--rounded-md);
+    box-shadow: var(--shadow-xs);
     transition:
       border-color 0.15s ease,
       box-shadow 0.15s ease;
   }
 
+  .text-input::placeholder,
+  .textarea-input::placeholder {
+    color: color-mix(in oklch, var(--muted-foreground) 75%, transparent);
+  }
+
+  .text-input:hover:not(:focus),
+  .textarea-input:hover:not(:focus) {
+    border-color: color-mix(in oklch, var(--input) 55%, var(--foreground));
+  }
+
   .text-input:focus {
     outline: none;
     border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 28%, transparent);
+    box-shadow: 0 0 0 3.5px var(--color-ring-focus);
   }
 
   .textarea-input {
     width: 100%;
     min-height: 120px;
-    padding: 16px;
-    background-color: var(--background);
+    padding: 16px 18px;
+    background-color: var(--card);
     color: var(--foreground);
     font-family: var(--font-sans);
     font-size: 16px;
+    line-height: 1.55;
     border: 1px solid var(--input);
     border-radius: var(--rounded-md);
+    box-shadow: var(--shadow-xs);
     resize: vertical;
     transition:
       border-color 0.15s ease,
@@ -295,54 +365,57 @@
   .textarea-input:focus {
     outline: none;
     border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 28%, transparent);
+    box-shadow: 0 0 0 3.5px var(--color-ring-focus);
   }
 
   .card,
   .card-bone,
   .card-dark {
     border-radius: var(--rounded-lg);
-    padding: var(--spacing-lg);
+    padding: var(--spacing-xl);
   }
 
   .card {
     background-color: var(--card);
     color: var(--card-foreground);
-    border: 1px solid var(--border);
-    box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 7%, transparent);
+    border: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
+    box-shadow: var(--shadow-sm);
   }
 
   .card-bone {
-    background-color: var(--secondary);
+    background-color: color-mix(in oklch, var(--secondary) 70%, var(--card));
     color: var(--secondary-foreground);
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+    box-shadow: var(--shadow-xs);
   }
 
   .card-dark {
     background-color: var(--foreground);
     color: var(--background);
+    box-shadow: var(--shadow-md);
   }
 
   .badge-status,
   .badge-tag {
     display: inline-flex;
     align-items: center;
-    border-radius: var(--rounded-sm);
+    border-radius: var(--rounded-full);
     font-size: 12px;
     line-height: 1;
-    padding: 4px 10px;
+    padding: 5px 11px;
   }
 
   .badge-status {
     background-color: var(--primary);
     color: var(--primary-foreground);
+    box-shadow: var(--shadow-primary-sm);
     font-weight: 600;
   }
 
   .badge-tag {
-    background-color: var(--secondary);
+    background-color: color-mix(in oklch, var(--secondary) 60%, var(--card));
     color: var(--secondary-foreground);
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in oklch, var(--border) 75%, transparent);
     font-weight: 500;
   }
 
@@ -351,12 +424,13 @@
     align-items: center;
     justify-content: center;
     min-width: 44px;
-    height: 40px;
-    padding: 6px 14px;
-    background-color: var(--background);
+    height: 42px;
+    padding: 6px 16px;
+    background-color: var(--card);
     color: var(--foreground);
     border: 1px solid var(--input);
-    border-radius: var(--rounded-md);
+    border-radius: var(--rounded-full);
+    box-shadow: var(--shadow-xs);
     font-family: var(--font-sans);
     font-size: 14px;
     font-weight: 600;
@@ -365,17 +439,25 @@
     transition:
       background-color 0.15s ease,
       border-color 0.15s ease,
-      color 0.15s ease;
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.12s ease;
   }
 
   .pill-select:hover {
     background-color: var(--secondary);
+    border-color: color-mix(in oklch, var(--primary) 40%, var(--input));
+  }
+
+  .pill-select:active {
+    transform: translateY(1px);
   }
 
   .pill-select.selected {
     background-color: var(--primary);
     color: var(--primary-foreground);
     border-color: var(--primary);
+    box-shadow: var(--shadow-primary-sm);
   }
 }
 

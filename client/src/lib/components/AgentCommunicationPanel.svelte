@@ -56,7 +56,9 @@
     border: 1px solid var(--color-hairline);
     border-radius: var(--rounded-md);
     padding: var(--spacing-md);
-    background: var(--color-surface);
+    background: var(--color-surface-card);
+    box-shadow: var(--shadow-xs);
+    flex-shrink: 0;
   }
 
   .agent-comm-summary {

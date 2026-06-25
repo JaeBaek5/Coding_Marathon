@@ -213,11 +213,14 @@
     flex-direction: column;
     gap: var(--spacing-lg);
     width: 100%;
+    flex: 1;
+    min-height: 0;
   }
 
   .results-header {
     border-bottom: 1px solid var(--color-hairline);
     padding-bottom: var(--spacing-sm);
+    flex-shrink: 0;
   }
 
   .title {
@@ -237,6 +240,12 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 4px 6px;
+    scrollbar-gutter: stable;
   }
 
   .result-card {
@@ -249,12 +258,14 @@
 
   .result-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(32, 32, 32, 0.08);
+    box-shadow: var(--shadow-lg);
   }
 
   .result-card.active {
     border-color: var(--color-primary);
-    box-shadow: 0 4px 16px rgba(234, 40, 4, 0.12);
+    box-shadow:
+      0 0 0 1px var(--color-primary),
+      0 10px 26px color-mix(in oklch, var(--primary) 20%, transparent);
     outline: none;
   }
 
@@ -489,5 +500,6 @@
     height: 48px;
     font-size: 16px;
     margin-top: var(--spacing-md);
+    flex-shrink: 0;
   }
 </style>
