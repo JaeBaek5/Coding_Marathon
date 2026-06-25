@@ -315,6 +315,72 @@ describe('extractNaverReviews', () => {
     ]);
   });
 
+  it('derives recursive DO and DONT signals from varied review food language', async () => {
+    const html = buildReviewPageHtml([
+      {
+        body: '삼겹살 한 근인데 두 근 양을 주셔서 고기 먹고 싶은 날 다시 가고 싶어요',
+        rating: 5
+      },
+      {
+        body: '쌀국수가 너무 맛있고 고수 향도 좋아서 베트남 음식 생각날 때 좋습니다',
+        rating: 5
+      },
+      {
+        body: '돈가스 튀김이 바삭하고 양식 메뉴 구성이 좋아요',
+        rating: 4
+      },
+      {
+        body:
+          '짬뽕은 새우가 없어서 아쉬웠지만 짜장면은 잘 넘어가고 텁텁한 느낌도 없어요',
+        rating: 3
+      },
+      {
+        body: '칼국수 면이 쫄깃하고 국물이 진해요',
+        rating: 4
+      },
+      {
+        body: '직원이 불친절하고 위생이 아쉬워서 다시 방문하고 싶지 않아요',
+        rating: 1
+      }
+    ]);
+
+    const result = await extractNaverReviews(
+      {
+        placeUrl: 'https://m.place.naver.com/restaurant/1234567890/home'
+      },
+      { fetchFn: vi.fn().mockResolvedValue({ ok: true, text: () => html }) }
+    );
+
+    expect(result.reviewSignals.categories).toEqual(
+      expect.arrayContaining(['meat', 'vietnamese', 'noodle', 'western'])
+    );
+    expect(
+      result.reviewSignals.doReasons.some((reason) => reason.evidence.includes('삼겹살'))
+    ).toBe(true);
+    expect(
+      result.reviewSignals.doReasons.some((reason) => reason.evidence.includes('쌀국수'))
+    ).toBe(true);
+    expect(
+      result.reviewSignals.doReasons.some((reason) => reason.evidence.includes('돈가스'))
+    ).toBe(true);
+    expect(
+      result.reviewSignals.doReasons.some((reason) => reason.evidence.includes('칼국수'))
+    ).toBe(true);
+    expect(
+      result.reviewSignals.doReasons.some((reason) => reason.evidence.includes('짜장면'))
+    ).toBe(true);
+    expect(
+      result.reviewSignals.dontReasons.some((reason) => reason.evidence.includes('새우가 없어서'))
+    ).toBe(true);
+    expect(
+      result.reviewSignals.dontReasons.some((reason) => reason.evidence.includes('불친절'))
+    ).toBe(true);
+    expect(
+      result.reviewSignals.dontReasons.some((reason) => reason.evidence.includes('위생이 아쉬'))
+    ).toBe(true);
+    expect(result.shouldExcludeFromRecommendation).toBe(true);
+  });
+
   it('does not reuse a negative contrast review as a positive summary', async () => {
     const reviews = [
       {

@@ -1,0 +1,124 @@
+{
+  "negativeExtractor": {
+    "reviewSignals": {
+      "categories": [
+        "meat",
+        "noodle",
+        "chinese"
+      ],
+      "doReasons": [
+        {
+          "label": "고기 양이 넉넉함",
+          "evidence": "삼겹살 한 근인데 두 근 양을 주셔서 고기 먹고 싶은 날 다시 가고 싶어요"
+        },
+        {
+          "label": "면과 국물 만족도가 높음",
+          "evidence": "짜장면은 잘 넘어가고 텁텁한 느낌도 없어요"
+        }
+      ],
+      "dontReasons": [
+        {
+          "label": "재료 아쉬움",
+          "evidence": "짬뽕은 새우가 없어서 아쉬웠지만"
+        },
+        {
+          "label": "불친절 응대",
+          "evidence": "직원이 불친절하고 위생이 아쉬워서 다시 방문하고 싶지 않아요"
+        },
+        {
+          "label": "위생 아쉬움",
+          "evidence": "직원이 불친절하고 위생이 아쉬워서 다시 방문하고 싶지 않아요"
+        }
+      ]
+    },
+    "shouldExcludeFromRecommendation": true
+  },
+  "positiveExtractor": {
+    "reviewSignals": {
+      "categories": [
+        "vietnamese",
+        "noodle"
+      ],
+      "doReasons": [
+        {
+          "label": "쌀국수 맛이 좋음",
+          "evidence": "쌀국수가 너무 맛있고 고수 향도 좋아서 베트남 음식 생각날 때 좋습니다"
+        },
+        {
+          "label": "음식이 맛있음",
+          "evidence": "쌀국수가 너무 맛있고 고수 향도 좋아서 베트남 음식 생각날 때 좋습니다"
+        },
+        {
+          "label": "면과 국물 만족도가 높음",
+          "evidence": "칼국수 면이 쫄깃하고 국물이 진해요"
+        },
+        {
+          "label": "대화하기 좋음",
+          "evidence": "조용해서 친구와 편하게 오래 얘기하기 좋았어요"
+        }
+      ],
+      "dontReasons": []
+    },
+    "shouldExcludeFromRecommendation": false
+  },
+  "gimel": {
+    "resultCount": 1,
+    "firstResult": {
+      "id": "review-signal-qa",
+      "name": "리뷰신호식당",
+      "category": "음식점",
+      "address": "순천",
+      "location": {
+        "lat": 35.176,
+        "lng": 127.503
+      },
+      "placeUrl": "https://map.naver.com/p/entry/place/1234567890",
+      "transportMode": "walk",
+      "oneWayRouteMinutes": 6,
+      "totalExpectedMinutes": 45,
+      "distanceMeters": 480,
+      "confidenceBadge": "high",
+      "providerAttribution": "qa",
+      "openStatus": null,
+      "reason": "음식점 식당으로 도보 6분 거리여서 이동 부담이 적고, 쌀국수와 베트남 음식 만족도가 높습니다.",
+      "priceLevel": null,
+      "openingHours": null,
+      "reviewSummary": {
+        "pros": "쌀국수와 베트남 음식 만족도가 높다고 합니다.",
+        "cons": null
+      },
+      "path": [],
+      "rating": null,
+      "reviewCount": 3,
+      "reviewSignals": {
+        "categories": [
+          "vietnamese",
+          "noodle"
+        ],
+        "doReasons": [
+          {
+            "label": "쌀국수 맛이 좋음",
+            "evidence": "쌀국수가 너무 맛있고 고수 향도 좋아서 베트남 음식 생각날 때 좋습니다"
+          },
+          {
+            "label": "음식이 맛있음",
+            "evidence": "쌀국수가 너무 맛있고 고수 향도 좋아서 베트남 음식 생각날 때 좋습니다"
+          },
+          {
+            "label": "면과 국물 만족도가 높음",
+            "evidence": "칼국수 면이 쫄깃하고 국물이 진해요"
+          },
+          {
+            "label": "대화하기 좋음",
+            "evidence": "조용해서 친구와 편하게 오래 얘기하기 좋았어요"
+          }
+        ],
+        "dontReasons": []
+      },
+      "mainPhoto": null,
+      "menuBoardPhoto": null,
+      "reviewPhotos": [],
+      "menuItems": []
+    }
+  }
+}

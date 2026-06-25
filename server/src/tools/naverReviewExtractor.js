@@ -336,12 +336,122 @@ const NEGATIVE_REVIEW_KEYWORDS = [
 
 const CONTRAST_CONNECTORS = ['지만', '하지만', '그런데', '다만', '입니다만', '으나'];
 
+const REVIEW_CATEGORY_RULES = [
+  { category: 'meat', patterns: ['삼겹살', '목살', '고기', '한 근', '갈비', '소고기'] },
+  { category: 'vietnamese', patterns: ['쌀국수', '반미', '분짜', '고수', '베트남'] },
+  { category: 'noodle', patterns: ['국수', '쌀국수', '칼국수', '모밀', '면', '짜장면', '짬뽕'] },
+  { category: 'western', patterns: ['돈가스', '돈까스', '파스타', '스테이크', '양식'] },
+  { category: 'korean', patterns: ['국밥', '찌개', '백반', '한식', '김치'] },
+  { category: 'japanese', patterns: ['초밥', '라멘', '우동', '덮밥', '일식'] },
+  { category: 'chinese', patterns: ['짜장', '짬뽕', '탕수육', '중식', '마라'] }
+];
+
+const REVIEW_DO_RULES = [
+  { label: '고기 양이 넉넉함', patterns: ['두 근 양', '양을 많이', '양이 많', '푸짐'] },
+  { label: '쌀국수 맛이 좋음', patterns: ['쌀국수', '고수 향', '베트남 음식'] },
+  { label: '튀김 식감이 좋음', patterns: ['바삭', '튀김'] },
+  {
+    label: '면과 국물 만족도가 높음',
+    patterns: ['잘 넘어가', '텁텁한 느낌도 없', '면이 좋', '쫄깃', '국물이 진']
+  },
+  { label: '매장이 깨끗함', patterns: ['깨끗', '깔끔한 인테리어', '위생적'] },
+  { label: '혼밥하기 좋음', patterns: ['혼밥', '혼자 먹기'] },
+  { label: '음식이 맛있음', patterns: ['맛있', '존맛', '맛집'] },
+  { label: '응대가 친절함', patterns: ['친절', '응대가 좋'] },
+  { label: '대화하기 좋음', patterns: ['조용', '편하게 얘기', '오래 얘기'] }
+];
+
+const REVIEW_DONT_RULES = [
+  { label: '불친절 응대', patterns: ['불친절', '응대가 별로', '직원이 별로'] },
+  { label: '위생 아쉬움', patterns: ['위생이 아쉬', '더러', '청결이 아쉬'] },
+  { label: '재방문 의사 낮음', patterns: ['재방문하고 싶지', '재방문 안', '다시는'] },
+  { label: '음식 아쉬움', patterns: ['맛없', '밍밍', '별로'] },
+  { label: '대기나 제공이 느림', patterns: ['늦게', '느리', '오래 기다'] },
+  { label: '가격 부담', patterns: ['비싸', '가격 대비'] },
+  { label: '시끄러움', patterns: ['시끄'] },
+  { label: '주차 불편', patterns: ['주차가 불편', '주차 불편'] },
+  { label: '재료 아쉬움', patterns: ['새우가 없어서 아쉬', '재료가 부족'] }
+];
+
 function firstReviewSentence(body) {
   return body.split(/[.!?\n]/)[0].trim();
 }
 
 function reviewContainsAny(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
+}
+
+function splitReviewClauses(body) {
+  const sentence = firstReviewSentence(body);
+  const clauses = [sentence.trim()].filter(Boolean);
+  for (const connector of CONTRAST_CONNECTORS) {
+    const nextClauses = [];
+    for (const clause of clauses) {
+      const index = clause.indexOf(connector);
+      if (index === -1) {
+        nextClauses.push(clause);
+        continue;
+      }
+      const before = clause.slice(0, index + connector.length).trim();
+      const after = clause.slice(index + connector.length).trim();
+      if (before) nextClauses.push(before);
+      if (after) nextClauses.push(after);
+    }
+    clauses.splice(0, clauses.length, ...nextClauses);
+  }
+  return clauses;
+}
+
+function createEmptyReviewSignals() {
+  return { categories: [], doReasons: [], dontReasons: [] };
+}
+
+function addUniqueSignal(signals, bucket, signal) {
+  if (bucket === 'categories') {
+    if (!signals.categories.includes(signal)) signals.categories.push(signal);
+    return;
+  }
+  if (
+    !signals[bucket].some(
+      (item) => item.label === signal.label && item.evidence === signal.evidence
+    )
+  ) {
+    signals[bucket].push(signal);
+  }
+}
+
+function matchReviewRules(text, rules) {
+  return rules.filter((rule) =>
+    rule.patterns.some((pattern) => text.includes(pattern))
+  );
+}
+
+function deriveReviewSignals(reviews) {
+  const signals = createEmptyReviewSignals();
+  for (const review of reviews) {
+    const normalized = firstReviewSentence(review.body).trim();
+    const clauses = splitReviewClauses(review.body);
+
+    for (const rule of matchReviewRules(normalized, REVIEW_CATEGORY_RULES)) {
+      addUniqueSignal(signals, 'categories', rule.category);
+    }
+    for (const clause of clauses) {
+      for (const rule of matchReviewRules(clause, REVIEW_DO_RULES)) {
+        if (matchReviewRules(clause, REVIEW_DONT_RULES).length > 0) continue;
+        addUniqueSignal(signals, 'doReasons', {
+          label: rule.label,
+          evidence: clause.slice(0, 120)
+        });
+      }
+      for (const rule of matchReviewRules(clause, REVIEW_DONT_RULES)) {
+        addUniqueSignal(signals, 'dontReasons', {
+          label: rule.label,
+          evidence: clause.slice(0, 120)
+        });
+      }
+    }
+  }
+  return signals;
 }
 
 export function isNegativeReview(review) {
@@ -455,6 +565,7 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
       reviewCount: null,
       reviews: [],
       reviewSummary: { pros: null, cons: null },
+      reviewSignals: createEmptyReviewSignals(),
       reviewSnippets: [],
       negativeReviewCount: 0,
       positiveReviewCount: 0,
@@ -478,6 +589,7 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
       reviewCount: null,
       reviews: [],
       reviewSummary: { pros: null, cons: null },
+      reviewSignals: createEmptyReviewSignals(),
       reviewSnippets: [],
       negativeReviewCount: 0,
       positiveReviewCount: 0,
@@ -495,15 +607,18 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
   const reviewSnippets = reviews.slice(0, 5).map((r) => r.body.slice(0, 140));
   const pros = reviews.length > 0 ? summarizePositiveReviews(reviews) : null;
   const cons = reviews.length > 0 ? summarizeNegativeReviews(reviews) : null;
+  const reviewSignals = deriveReviewSignals(reviews);
   const negativeReviewCount = reviews.filter(isNegativeReview).length;
   const positiveReviewCount = reviews.filter(isPositiveReview).length;
-  const shouldExcludeFromRecommendation = shouldExcludeByReviewSentiment({
-    reviews,
-    pros,
-    cons,
-    negativeReviewCount,
-    positiveReviewCount
-  });
+  const shouldExcludeFromRecommendation =
+    reviewSignals.dontReasons.length >= 2 ||
+    shouldExcludeByReviewSentiment({
+      reviews,
+      pros,
+      cons,
+      negativeReviewCount: negativeReviewCount + reviewSignals.dontReasons.length,
+      positiveReviewCount
+    });
   const rating = extractRatingFromState(state);
 
   return ReviewExtractionOutputSchema.parse({
@@ -514,6 +629,7 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
     reviewCount: allReviews.length,
     reviews,
     reviewSummary: { pros, cons },
+    reviewSignals,
     reviewSnippets,
     reviewPhotos,
     negativeReviewCount,

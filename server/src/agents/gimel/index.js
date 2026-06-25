@@ -67,6 +67,7 @@ function createToolError(message) {
     reviewCount: null,
     reviews: [],
     reviewSummary: { pros: null, cons: null },
+    reviewSignals: { categories: [], doReasons: [], dontReasons: [] },
     reviewSnippets: [],
     reviewPhotos: [],
     mainPhoto: null,
@@ -163,6 +164,12 @@ function summarizePositiveText(text) {
   if (normalized.includes('깨끗') && normalized.includes('혼밥')) {
     return '매장이 깨끗하고 혼밥하기 좋은 구성이라고 합니다.';
   }
+  if (normalized.includes('쌀국수') || normalized.includes('베트남')) {
+    return '쌀국수와 베트남 음식 만족도가 높다고 합니다.';
+  }
+  if (normalized.includes('쫄깃') || normalized.includes('잘 넘어가')) {
+    return '면 식감이 좋고 부담 없이 먹기 좋다고 합니다.';
+  }
   if (normalized.includes('깨끗')) return '매장이 깨끗하다고 합니다.';
   if (normalized.includes('국물') && normalized.includes('든든')) {
     return '국물이 진하고 든든하다고 합니다.';
@@ -193,13 +200,17 @@ function summarizeNegativeText(text) {
 function deriveReviewSummary(scraped) {
   const reviews = Array.isArray(scraped?.reviews) ? scraped.reviews : [];
   const bodies = reviews.map((review) => review?.body).filter(Boolean);
+  const doReason = scraped?.reviewSignals?.doReasons?.[0]?.evidence ?? null;
+  const dontReason = scraped?.reviewSignals?.dontReasons?.[0]?.evidence ?? null;
   const positiveSource =
+    doReason ||
     bodies.find((body) => normalizeReviewText(body).includes('깨끗')) ||
     bodies.find(isPositiveReviewText) ||
     scraped?.reviewSummary?.pros ||
     scraped?.reviewSnippets?.find(isPositiveReviewText) ||
     null;
   const negativeSource =
+    dontReason ||
     bodies.find(
       (body) => isNegativeReviewText(body) && normalizeReviewText(body).includes('지만')
     ) ||
@@ -219,6 +230,12 @@ function createConciseFallbackReason(candidate, reviewSummary) {
   const base = `${candidate.category} 식당으로 ${transportLabel} ${candidate.oneWayRouteMinutes}분 거리여서 이동 부담이 적`;
   const pros = normalizeReviewText(reviewSummary?.pros);
   if (pros.includes('깨끗')) return `${base}고, 매장이 깨끗해서 좋습니다.`;
+  if (pros.includes('쌀국수') || pros.includes('베트남')) {
+    return `${base}고, 쌀국수와 베트남 음식 만족도가 높습니다.`;
+  }
+  if (pros.includes('면 식감') || pros.includes('부담 없이 먹기')) {
+    return `${base}고, 면 식감이 좋고 부담 없이 먹기 좋습니다.`;
+  }
   if (pros.includes('국물') && pros.includes('든든')) {
     return `${base}고, 국물이 진하고 든든하다는 평가가 있습니다.`;
   }
@@ -559,6 +576,12 @@ export class GimelAgent {
             rating: scraped.rating ?? candidate.rating ?? null,
             reviewCount: scraped.reviewCount ?? candidate.reviewCount ?? null,
             reviewSummary: cleanedReviewSummary ?? candidate.reviewSummary ?? null,
+            reviewSignals:
+              scraped.reviewSignals ?? candidate.reviewSignals ?? {
+                categories: [],
+                doReasons: [],
+                dontReasons: []
+              },
             mainPhoto: media.mainPhoto ?? null,
             menuBoardPhoto: media.menuBoardPhoto ?? null,
             reviewPhotos: media.reviewPhotos ?? [],

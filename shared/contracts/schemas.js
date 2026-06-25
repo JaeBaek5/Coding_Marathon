@@ -182,6 +182,27 @@ export const NormalizedCandidateSchema = z.object({
     })
     .nullable()
     .default(null),
+  reviewSignals: z
+    .object({
+      categories: z.array(z.string()).default([]),
+      doReasons: z
+        .array(
+          z.object({
+            label: z.string(),
+            evidence: z.string()
+          })
+        )
+        .default([]),
+      dontReasons: z
+        .array(
+          z.object({
+            label: z.string(),
+            evidence: z.string()
+          })
+        )
+        .default([])
+    })
+    .default({ categories: [], doReasons: [], dontReasons: [] }),
   mainPhoto: z.string().url().nullable().default(null),
   menuBoardPhoto: z.string().url().nullable().default(null),
   reviewPhotos: z.array(z.string().url()).default([]),
@@ -245,6 +266,27 @@ export const BetCandidateSchema = z
       })
       .nullable()
       .default(null),
+    reviewSignals: z
+      .object({
+        categories: z.array(z.string()).default([]),
+        doReasons: z
+          .array(
+            z.object({
+              label: z.string(),
+              evidence: z.string()
+            })
+          )
+          .default([]),
+        dontReasons: z
+          .array(
+            z.object({
+              label: z.string(),
+              evidence: z.string()
+            })
+          )
+          .default([])
+      })
+      .default({ categories: [], doReasons: [], dontReasons: [] }),
     scoreBreakdown: z
       .object({
         total: z.number(),
@@ -403,6 +445,27 @@ export const ReviewExtractionOutputSchema = z
         cons: z.string().nullable()
       })
       .strict(),
+    reviewSignals: z
+      .object({
+        categories: z.array(z.string()).default([]),
+        doReasons: z
+          .array(
+            z.object({
+              label: z.string(),
+              evidence: z.string()
+            })
+          )
+          .default([]),
+        dontReasons: z
+          .array(
+            z.object({
+              label: z.string(),
+              evidence: z.string()
+            })
+          )
+          .default([])
+      })
+      .default({ categories: [], doReasons: [], dontReasons: [] }),
     reviewSnippets: z.array(z.string()),
     reviewPhotos: z.array(z.string().url()).default([]),
     mainPhoto: z.string().url().nullable().default(null),
