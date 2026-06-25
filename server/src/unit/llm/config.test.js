@@ -61,10 +61,10 @@ describe('LLM Config Loader', () => {
     expect(config.baseURL).toBe('https://openrouter.ai/api/v1');
     expect(config.reasoning).toEqual({ enabled: true });
     expect(config.models).toEqual({
-      orchestrator: 'anthropic/claude-sonnet-4.6',
-      aleph: 'anthropic/claude-sonnet-4.6',
-      bet: 'anthropic/claude-sonnet-4.6',
-      gimel: 'anthropic/claude-sonnet-4.6'
+      orchestrator: 'anthropic/claude-opus-4.8-fast',
+      aleph: 'anthropic/claude-opus-4.8-fast',
+      bet: 'anthropic/claude-opus-4.8-fast',
+      gimel: 'anthropic/claude-opus-4.8-fast'
     });
   });
 

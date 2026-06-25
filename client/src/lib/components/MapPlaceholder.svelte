@@ -218,12 +218,16 @@
 
   function renderResultMarkers() {
     const results = getDisplayResults();
-    if (!mapInstance || !results.length) return;
+    if (!mapInstance) return;
 
+    // Always clear stale markers before re-rendering next recommendation set.
     for (const marker of resultMarkers) {
       marker.setMap(null);
     }
     resultMarkers = [];
+    if (!results.length) {
+      return;
+    }
 
     const activeIndex = getActiveResultIndex(results.length);
 

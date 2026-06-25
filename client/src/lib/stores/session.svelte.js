@@ -144,10 +144,15 @@ export function createSessionStore() {
     if (!query.trim()) return;
     loading = true;
     error = null;
+    status = 'loading';
+    results = [];
+    activeResultIndex = 0;
+    agentCommunicationLog = [];
 
     if (mode === 'normal') {
       const browserLocation = await getGeolocation();
       if (!browserLocation) {
+        status = 'error';
         loading = false;
         return;
       }

@@ -92,6 +92,8 @@ export class BetAgent {
     trace({
       ...event,
       agent: 'bet',
+      fromAgent: event.fromAgent || 'bet',
+      toAgent: event.toAgent || 'bet',
       timestamp: new Date().toISOString()
     });
   }
@@ -231,6 +233,19 @@ export class BetAgent {
 
     const routedCandidates = [];
     let routeFailureCount = 0;
+    const routeLookupSummary = {
+      candidatesForLookup: candidatesForRouting.length,
+      succeeded: 0,
+      failed: 0,
+      topSuccessCandidateIds: [],
+      topFailedCandidateIds: []
+    };
+    this.appendTrace(trace, {
+      event: 'bet_route_lookup_started',
+      phase: 'route_lookup',
+      candidateCount: routeLookupSummary.candidatesForLookup,
+      transportMode
+    });
 
     const routeResults = await mapWithConcurrencyLimit(
       candidatesForRouting,
@@ -245,13 +260,6 @@ export class BetAgent {
           candidateName: candidate.name,
           transportMode
         });
-        this.appendTrace(trace, {
-          event: 'bet_route_lookup_started',
-          phase: 'route_lookup',
-          candidateId: candidate.id,
-          candidateName: candidate.name,
-          transportMode
-        });
 
         try {
           const route = await getRoute(
@@ -260,11 +268,11 @@ export class BetAgent {
             candidate.location.lat,
             candidate.location.lng
           );
-          this.appendTrace(trace, {
-            event: 'bet_route_lookup_success',
-            phase: 'route_lookup',
-            candidateId: candidate.id
-          });
+
+          routeLookupSummary.succeeded += 1;
+          if (routeLookupSummary.topSuccessCandidateIds.length < 3) {
+            routeLookupSummary.topSuccessCandidateIds.push(candidate.id);
+          }
 
           return this.dependencies.mergeCandidateWithRoute(
             candidate,
@@ -280,13 +288,10 @@ export class BetAgent {
             candidateName: candidate.name,
             transportMode
           });
-          this.appendTrace(trace, {
-            event: 'bet_route_lookup_failed',
-            phase: 'route_lookup',
-            candidateId: candidate.id,
-            candidateName: candidate.name,
-            transportMode
-          });
+          routeLookupSummary.failed += 1;
+          if (routeLookupSummary.topFailedCandidateIds.length < 3) {
+            routeLookupSummary.topFailedCandidateIds.push(candidate.id);
+          }
           return null;
         }
       }
@@ -314,6 +319,15 @@ export class BetAgent {
       phase: 'route_lookup',
       routedCandidateCount: routeMetadata.routedCandidateCount,
       routeFailureCount
+    });
+    this.appendTrace(trace, {
+      event: 'bet_route_lookup_fanout',
+      phase: 'route_lookup',
+      candidateCount: routeLookupSummary.candidatesForLookup,
+      succeeded: routeLookupSummary.succeeded,
+      failed: routeLookupSummary.failed,
+      topSuccessCandidateIds: routeLookupSummary.topSuccessCandidateIds,
+      topFailedCandidateIds: routeLookupSummary.topFailedCandidateIds
     });
 
     if (routedCandidates.length === 0) {

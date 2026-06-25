@@ -96,6 +96,19 @@ class SessionStore {
       session.agentCommunicationLog = [];
     }
 
+    const lastEntry = session.agentCommunicationLog[session.agentCommunicationLog.length - 1];
+    const isDuplicate =
+      lastEntry &&
+      lastEntry.event === entry.event &&
+      lastEntry.fromAgent === entry.fromAgent &&
+      lastEntry.toAgent === entry.toAgent &&
+      lastEntry.phase === entry.phase &&
+      (lastEntry.candidateId || null) === (entry.candidateId || null) &&
+      (lastEntry.action || null) === (entry.action || null);
+    if (isDuplicate) {
+      return lastEntry;
+    }
+
     session.agentCommunicationLog.push(entry);
     if (session.agentCommunicationLog.length > this.maxAgentLogsPerSession) {
       session.agentCommunicationLog.splice(
