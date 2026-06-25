@@ -245,3 +245,99 @@ describe('Cache TTL Correctness', () => {
     expect(callCount).toBe(2);
   });
 });
+
+describe('Task 4 hardening: normalization edges and contract fidelity', () => {
+  it('should carry Kakao place_url into placeUrl so Gimel review extraction can resolve it', () => {
+    const rawDoc = {
+      id: '111111',
+      place_name: '든든한국밥',
+      category_name: '음식점 > 한식 > 국밥 > 순대국',
+      address_name: '서울 강남구 역삼동 123-45',
+      road_address_name: '서울 강남구 테헤란로 123',
+      x: '127.0282',
+      y: '37.4981',
+      place_url: 'http://place.map.kakao.com/111111'
+    };
+
+    const candidate = normalizeKakaoLocalCandidate(rawDoc);
+    expect(candidate.placeUrl).toBe('http://place.map.kakao.com/111111');
+  });
+
+  it('should set placeUrl to null when Kakao omits place_url', () => {
+    const rawDoc = {
+      id: '222222',
+      place_name: '깔끔초밥',
+      category_name: '음식점 > 일식 > 초밥 > 일식집',
+      road_address_name: '서울 강남구 강남대로 543',
+      x: '127.0255',
+      y: '37.4965'
+    };
+
+    const candidate = normalizeKakaoLocalCandidate(rawDoc);
+    expect(candidate.placeUrl).toBeNull();
+  });
+
+  it('should preserve placeUrl through mergeCandidateWithRoute into a schema-valid candidate', () => {
+    const rawDoc = {
+      id: '111111',
+      place_name: '든든한국밥',
+      category_name: '음식점 > 한식 > 국밥 > 순대국',
+      road_address_name: '서울 강남구 테헤란로 123',
+      x: '127.0282',
+      y: '37.4981',
+      place_url: 'http://place.map.kakao.com/111111'
+    };
+    const candidate = normalizeKakaoLocalCandidate(rawDoc);
+    const route = {
+      durationMinutes: 5,
+      distanceMeters: 400,
+      path: [{ lat: 37.4979, lng: 127.0276 }]
+    };
+
+    const merged = mergeCandidateWithRoute(candidate, route, 'walk');
+    expect(merged.placeUrl).toBe('http://place.map.kakao.com/111111');
+  });
+
+  it('should throw a deterministic error when Kakao walking payload has zero routes', () => {
+    expect(() => normalizeKakaoWalkingRoute({ routes: [] })).toThrow(
+      'No walking routes found'
+    );
+  });
+
+  it('should throw a deterministic error when NAVER driving payload has a non-zero code', () => {
+    expect(() =>
+      normalizeNaverDrivingRoute({ code: 1, message: 'fail' })
+    ).toThrow('No driving routes found');
+  });
+
+  it('should keep same-name candidates that sit farther than 50m apart', () => {
+    const list = [
+      {
+        id: 'a',
+        name: '든든한국밥',
+        address: '서울 강남구 역삼동 123-45',
+        location: { lat: 37.4981, lng: 127.0282 }
+      },
+      {
+        id: 'b',
+        name: '든든한국밥',
+        address: '서울 강남구 역삼동 999-99',
+        location: { lat: 37.5099, lng: 127.0399 }
+      }
+    ];
+
+    const deduped = deduplicateCandidates(list);
+    expect(deduped).toHaveLength(2);
+  });
+
+  it('should isolate cache entries by key so different radii do not collide', () => {
+    let mockTime = 1000;
+    const cache = new InMemoryCache(() => mockTime);
+
+    cache.set('nearby:37.5:127.0:500', ['a'], cacheTTLs.NEARBY);
+    cache.set('nearby:37.5:127.0:1000', ['b'], cacheTTLs.NEARBY);
+
+    expect(cache.get('nearby:37.5:127.0:500')).toEqual(['a']);
+    expect(cache.get('nearby:37.5:127.0:1000')).toEqual(['b']);
+  });
+});

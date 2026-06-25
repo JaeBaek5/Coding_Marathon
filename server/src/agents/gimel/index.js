@@ -1,14 +1,15 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
 import {
   GimelInputAllowlistSchema,
-  GimelReasonOutputSchema
+  GimelReasonOutputSchema,
+  ReviewExtractionOutputSchema
 } from '../../../../shared/contracts/schemas.js';
 import {
   createAgentChatCompletion,
   getAgentHarness
 } from '../../llm/client.js';
 import { logger, logAgentHop } from '../../utils/logger.js';
-import { extractNaverPlaceReviews } from '../../tools/naverPlaceExtraction.js';
+import { extractNaverReviews } from '../../tools/naverReviewExtractor.js';
 
 const SCRAPE_REVIEWS_TOOL = {
   type: 'function',
@@ -35,15 +36,19 @@ const SCRAPE_REVIEWS_TOOL = {
 };
 
 function createToolError(message) {
-  return {
-    placeUrl: null,
+  return ReviewExtractionOutputSchema.parse({
     provider: null,
+    placeUrl: null,
+    placeId: null,
     rating: null,
     reviewCount: null,
+    reviews: [],
+    reviewSummary: { pros: null, cons: null },
     reviewSnippets: [],
-    sourceExcerpt: null,
+    extractionMethod: 'unavailable',
+    fetchedAt: new Date().toISOString(),
     error: message
-  };
+  });
 }
 
 function stripHtml(value) {
@@ -121,47 +126,64 @@ function collectReviewSnippets(text) {
 
 export async function defaultScrapeReviewsTool({ placeUrl, placeName, address }) {
   if (!placeUrl && !placeName) {
-    return createToolError('Missing place URL or place name');
+    return createToolError('Missing place URL and name');
   }
 
-  const provider = getProviderFromUrl(placeUrl);
-  if (provider === 'Naver Map' || String(placeUrl || '').includes('naver.com')) {
-    return extractNaverPlaceReviews({ placeUrl, placeName, address });
+  // Route Naver URLs through the full Apollo extraction pipeline.
+  if (placeUrl && String(placeUrl).toLowerCase().includes('naver.com')) {
+    return extractNaverReviews({ placeUrl, placeName, address });
   }
-
   if (!placeUrl) {
     return createToolError('Missing place URL');
   }
 
-  const response = await fetch(placeUrl);
-  if (!response.ok) {
-    return createToolError(
-      `Failed to fetch place page: ${response.status} ${response.statusText}`
-    );
+  // Kakao / other: static HTML scraping with ReviewExtractionOutputSchema output.
+  let html;
+  try {
+    const response = await fetch(placeUrl);
+    if (!response.ok) {
+      return createToolError(
+        `Failed to fetch place page: ${response.status} ${response.statusText}`
+      );
+    }
+    html = await response.text();
+  } catch (err) {
+    return createToolError(`Network error: ${err?.message ?? 'unknown'}`);
   }
 
-  const html = await response.text();
   const text = stripHtml(html);
-  const resolvedProvider = getProviderFromUrl(placeUrl);
+  const provider = getProviderFromUrl(placeUrl)?.toLowerCase().includes('kakao')
+    ? 'kakao'
+    : null;
   const rating = parseNumericCapture(
     text,
     /(?:평점|rating)\s*[:]?\s*([0-5](?:\.\d)?)/i
   );
-  const reviewCount = parseNumericCapture(
+  const reviewCountRaw = parseNumericCapture(
     text,
     /(?:리뷰|후기|평가)\s*(?:수|개수|count)?\s*[:]?\s*([0-9][0-9,]*)/i
   );
-  const reviewSnippets = collectReviewSnippets(text);
+  const snippets = collectReviewSnippets(text);
+  const reviews = snippets.map((body) => ({
+    body,
+    author: null,
+    rating: null,
+    visitedAt: null
+  }));
 
-  return {
+  return ReviewExtractionOutputSchema.parse({
+    provider,
     placeUrl,
-    provider: resolvedProvider,
+    placeId: null,
     rating,
-    reviewCount: reviewCount === null ? null : Math.round(reviewCount),
-    reviewSnippets,
-    sourceExcerpt: text.slice(0, 500),
+    reviewCount: reviewCountRaw === null ? null : Math.round(reviewCountRaw),
+    reviews,
+    reviewSummary: { pros: snippets[0] ?? null, cons: null },
+    reviewSnippets: snippets,
+    extractionMethod: 'static-hydration',
+    fetchedAt: new Date().toISOString(),
     error: null
-  };
+  });
 }
 
 export function sanitizeCandidateForPrompt(candidate) {
@@ -186,10 +208,15 @@ export function createGroundedFallbackReason(candidate, scraped) {
     `${candidate.category} 식당으로 ${transportLabel} ${candidate.oneWayRouteMinutes}분 거리여서 이동 부담이 적습니다.`
   ];
 
-  if (scraped?.reviewSnippets?.[0]) {
-    parts.push(
-      `실제 리뷰에는 "${scraped.reviewSnippets[0]}"라는 반응이 확인됩니다.`
-    );
+  // Prefer structured reviewSummary.pros over raw first snippet
+  const positiveFact =
+    scraped?.reviewSummary?.pros ?? scraped?.reviewSnippets?.[0] ?? null;
+  if (positiveFact) {
+    parts.push(`실제 리뷰에는 "${positiveFact}"라는 반응이 확인됩니다.`);
+  }
+
+  if (scraped?.reviewSummary?.cons) {
+    parts.push(`단점으로는 "${scraped.reviewSummary.cons}"는 반응도 있습니다.`);
   }
 
   if (typeof scraped?.rating === 'number') {
@@ -334,10 +361,9 @@ export class GimelAgent {
     });
 
     for (const candidate of candidates) {
-      let scraped = createToolError('LLM unavailable');
       let reason = createGroundedFallbackReason(
         sanitizeCandidateForPrompt(candidate),
-        scraped
+        createToolError('LLM unavailable')
       );
 
       if (llmRuntime) {
@@ -348,14 +374,12 @@ export class GimelAgent {
           candidateId: candidate.id,
           model: llmRuntime.model
         });
-        const toolLoopResult = await runReasonToolLoop(
+        const { parsed, scraped } = await runReasonToolLoop(
           candidate,
           this.dependencies.tools,
           this.dependencies.scrapeReviews,
           this.dependencies.createAgentChatCompletion
         );
-        scraped = toolLoopResult.scraped;
-        const { parsed } = toolLoopResult;
 
         const llmReason = parsed?.reasons?.find(
           (item) => item.id === candidate.id
@@ -386,16 +410,7 @@ export class GimelAgent {
             }
           );
         }
-      } else if (candidate.placeUrl || candidate.name) {
-        scraped = await this.dependencies.scrapeReviews({
-          placeUrl: candidate.placeUrl,
-          placeName: candidate.name,
-          address: candidate.address
-        });
-        reason = createGroundedFallbackReason(
-          sanitizeCandidateForPrompt(candidate),
-          scraped
-        );
+      } else {
         this.dependencies.logger.warn(
           'Gimel used deterministic fallback without LLM',
           {
@@ -407,15 +422,7 @@ export class GimelAgent {
 
       results.push({
         ...candidate,
-        reason,
-        reviewSummary: scraped?.reviewSummary ?? candidate.reviewSummary ?? null,
-        reviewSnippets: scraped?.reviewSnippets ?? candidate.reviewSnippets ?? [],
-        rating:
-          typeof scraped?.rating === 'number' ? scraped.rating : candidate.rating,
-        reviewCount:
-          typeof scraped?.reviewCount === 'number'
-            ? scraped.reviewCount
-            : candidate.reviewCount
+        reason
       });
     }
 

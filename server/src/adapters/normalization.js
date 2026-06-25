@@ -20,6 +20,7 @@ export function normalizeKakaoLocalCandidate(rawDoc) {
       lat: parseFloat(rawDoc.y),
       lng: parseFloat(rawDoc.x)
     },
+    placeUrl: rawDoc.place_url || null,
     priceLevel: null,
     openingHours: null,
     rating: null,

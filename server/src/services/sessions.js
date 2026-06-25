@@ -11,12 +11,13 @@ class SessionStore {
       id: sessionId,
       slots: { ...initialSlots },
       turnCount: 0,
+      feedbackDislikeCount: 0,
+      feedbackLikeCount: 0,
+      likedCandidateIds: [],
+      dislikedCandidateIds: [],
+      currentRecommendationIndex: 0,
       candidates: [],
       candidatePool: [],
-      likedIds: [],
-      dislikedIds: [],
-      dislikeCount: 0,
-      showFullPool: false,
       createdAt: now,
       updatedAt: now
     };
@@ -55,17 +56,20 @@ class SessionStore {
     if (updates.candidatePool !== undefined) {
       session.candidatePool = updates.candidatePool;
     }
-    if (updates.likedIds !== undefined) {
-      session.likedIds = updates.likedIds;
+    if (updates.feedbackDislikeCount !== undefined) {
+      session.feedbackDislikeCount = updates.feedbackDislikeCount;
     }
-    if (updates.dislikedIds !== undefined) {
-      session.dislikedIds = updates.dislikedIds;
+    if (updates.feedbackLikeCount !== undefined) {
+      session.feedbackLikeCount = updates.feedbackLikeCount;
     }
-    if (updates.dislikeCount !== undefined) {
-      session.dislikeCount = updates.dislikeCount;
+    if (updates.currentRecommendationIndex !== undefined) {
+      session.currentRecommendationIndex = updates.currentRecommendationIndex;
     }
-    if (updates.showFullPool !== undefined) {
-      session.showFullPool = updates.showFullPool;
+    if (updates.likedCandidateIds !== undefined) {
+      session.likedCandidateIds = updates.likedCandidateIds;
+    }
+    if (updates.dislikedCandidateIds !== undefined) {
+      session.dislikedCandidateIds = updates.dislikedCandidateIds;
     }
 
     session.updatedAt = Date.now();

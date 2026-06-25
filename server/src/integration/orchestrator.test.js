@@ -1,299 +1,399 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  orchestrator,
-  parseQueryToSlotsRegex,
-  generateGroundedExplanationFallback
-} from '../services/orchestrator.js';
+﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { OrchestratorAgent } from '../agents/orchestrator/index.js';
 import { sessions } from '../services/sessions.js';
-import { KakaoLocalAdapter } from '../adapters/kakaoLocalAdapter.js';
-import { cache } from '../utils/cache.js';
 import { ErrorCodes } from '../../../shared/contracts/schemas.js';
 
-describe('Orchestrator Service Integration Tests', () => {
+describe('Orchestrator Supervisor Integration Tests', () => {
+  const defaultSlots = {
+    mode: 'normal',
+    location: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' },
+    mealPeriod: 'lunch',
+    totalTimeMinutes: 60,
+    transportMode: 'walk',
+    budgetPerPersonKrw: 15000,
+    partyContext: '친구',
+    vibe: '조용한',
+    excludedFoods: ['매운 음식'],
+    venuePreference: 'restaurant'
+  };
+
+  const rankedCandidates = [
+    {
+      id: 'p-1',
+      name: '한식당A',
+      category: '식당',
+      address: '서울 종로구 테스트 1',
+      location: { lat: 37.4979, lng: 127.0276 },
+      placeUrl: 'https://place.map.kakao.com/111',
+      transportMode: 'walk',
+      oneWayRouteMinutes: 10,
+      totalExpectedMinutes: 50,
+      distanceMeters: 430,
+      confidenceBadge: 'high',
+      providerAttribution: 'Kakao Local / Kakao Mobility',
+      scoreBreakdown: {
+        total: 96,
+        components: { routeTime: 60, budgetFit: 20, contextFit: 16 }
+      },
+      openStatus: null
+    },
+    {
+      id: 'p-2',
+      name: '한식당B',
+      category: '식당',
+      address: '서울 종로구 테스트 2',
+      location: { lat: 37.498, lng: 127.028 },
+      placeUrl: 'https://place.map.kakao.com/112',
+      transportMode: 'walk',
+      oneWayRouteMinutes: 12,
+      totalExpectedMinutes: 52,
+      distanceMeters: 620,
+      confidenceBadge: 'high',
+      providerAttribution: 'Kakao Local / Kakao Mobility',
+      scoreBreakdown: {
+        total: 95,
+        components: { routeTime: 57, budgetFit: 20, contextFit: 18 }
+      },
+      openStatus: null
+    },
+    {
+      id: 'p-3',
+      name: '한식당C',
+      category: '식당',
+      address: '서울 종로구 테스트 3',
+      location: { lat: 37.4968, lng: 127.0269 },
+      placeUrl: 'https://place.map.kakao.com/113',
+      transportMode: 'walk',
+      oneWayRouteMinutes: 14,
+      totalExpectedMinutes: 55,
+      distanceMeters: 770,
+      confidenceBadge: 'medium',
+      providerAttribution: 'Kakao Local / Kakao Mobility',
+      scoreBreakdown: {
+        total: 90,
+        components: { routeTime: 55, budgetFit: 20, contextFit: 15 }
+      },
+      openStatus: null
+    },
+    {
+      id: 'p-4',
+      name: '한식당D',
+      category: '식당',
+      address: '서울 종로구 테스트 4',
+      location: { lat: 37.4983, lng: 127.0265 },
+      placeUrl: 'https://place.map.kakao.com/114',
+      transportMode: 'walk',
+      oneWayRouteMinutes: 8,
+      totalExpectedMinutes: 49,
+      distanceMeters: 370,
+      confidenceBadge: 'medium',
+      providerAttribution: 'Kakao Local / Kakao Mobility',
+      scoreBreakdown: {
+        total: 87,
+        components: { routeTime: 40, budgetFit: 20, contextFit: 27 }
+      },
+      openStatus: null
+    },
+    {
+      id: 'p-5',
+      name: '한식당E',
+      category: '식당',
+      address: '서울 종로구 테스트 5',
+      location: { lat: 37.4972, lng: 127.029 },
+      placeUrl: 'https://place.map.kakao.com/115',
+      transportMode: 'walk',
+      oneWayRouteMinutes: 16,
+      totalExpectedMinutes: 58,
+      distanceMeters: 900,
+      confidenceBadge: 'low',
+      providerAttribution: 'Kakao Local / Kakao Mobility',
+      scoreBreakdown: {
+        total: 82,
+        components: { routeTime: 35, budgetFit: 20, contextFit: 27 }
+      },
+      openStatus: null
+    }
+  ];
+
+  const createOrchestrator = ({
+    parseResult,
+    answerResult,
+    betStatus = 'results'
+  } = {}) => {
+    const aleph = {
+      parseQuery: vi.fn().mockResolvedValue(
+        parseResult ?? {
+          status: 'complete',
+          slots: defaultSlots
+        }
+      ),
+      processAnswers: vi.fn().mockResolvedValue(
+        answerResult ?? { status: 'complete', slots: defaultSlots }
+      )
+    };
+
+    const bet = {
+      search: vi.fn(async () => ({
+        status: betStatus,
+        results: rankedCandidates,
+        eligibleCount: rankedCandidates.length
+      }))
+    };
+
+    const gimel = {
+      generateReasons: vi.fn(async (candidates) =>
+        candidates.map((candidate) => ({
+          ...candidate,
+          reason: `${candidate.name}은(는) 맛집입니다.`
+        }))
+      )
+    };
+
+    return {
+      aleph,
+      orchestrator: new OrchestratorAgent({
+        aleph,
+        bet,
+        gimel
+      }),
+      bet,
+      gimel
+    };
+  };
+
   beforeEach(() => {
     sessions.clear();
-    cache.clear();
-    vi.stubEnv('OPENAI_API_KEY', '');
-    vi.stubEnv('GEMINI_API_KEY', '');
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
-  it('should parse queries using rule-based regex fallback correctly', () => {
-    const slots = parseQueryToSlotsRegex(
-      '회사 상사랑 점심 먹으려는데 1만원 이하로 1시간 안에 갈만한 조용한 도보로 갈 국밥집 추천해줘'
-    );
-    expect(slots.partyContext).toBe('상사');
-    expect(slots.mealPeriod).toBe('lunch');
-    expect(slots.budgetPerPersonKrw).toBe(10000);
-    expect(slots.totalTimeMinutes).toBe(60);
-    expect(slots.vibe).toBe('조용한');
-    expect(slots.transportMode).toBe('walk');
-  });
+  it('should return GEO_REQUIRED before Aleph when normal mode misses structured location', async () => {
+    const { orchestrator, aleph } = createOrchestrator();
 
-  it('should return GEO_REQUIRED error when normal mode is requested without userLocation', async () => {
     const res = await orchestrator.processRequest({
-      query: '상사랑 점심',
+      query: '친구랑 점심 먹으려고',
       mode: 'normal',
       userLocation: null
     });
 
     expect(res.status).toBe('error');
     expect(res.code).toBe(ErrorCodes.GEO_REQUIRED);
+    expect(aleph.parseQuery).not.toHaveBeenCalled();
   });
 
-  it('should trigger bundled questions state when slots are missing', async () => {
+  it('should return questions when Aleph reports missing required slots', async () => {
+    const { orchestrator } = createOrchestrator({
+      parseResult: {
+        status: 'questions',
+        missingFields: ['transportMode', 'budgetPerPersonKrw', 'vibe'],
+        questions: [
+          { field: 'transportMode', label: '이동수단(도보/차량)' },
+          { field: 'budgetPerPersonKrw', label: '1인 예산(원)' },
+          { field: 'vibe', label: '원하는 분위기' }
+        ],
+        currentState: defaultSlots
+      }
+    });
+
     const res = await orchestrator.processRequest({
-      query: '회사 상사랑 점심 먹으려는데 1시간 안에 갈만한 곳 추천해줘',
+      query: '친구랑 점심 먹으려고',
       mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
+      userLocation: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' }
     });
 
     expect(res.status).toBe('questions');
-    expect(res.sessionId).toBeDefined();
+    expect(res.sessionId).toBeTypeOf('string');
     expect(res.missingFields).toContain('transportMode');
-    expect(res.missingFields).toContain('budgetPerPersonKrw');
-    expect(res.missingFields).toContain('vibe');
 
-    const transportQ = res.questions.find((q) => q.field === 'transportMode');
-    expect(transportQ.label).toBe('도보로 갈까요, 차로 갈까요?');
+    const session = sessions.get(res.sessionId);
+    expect(session).toBeDefined();
+    expect(session.turnCount).toBe(0);
   });
 
-  it('should transition through follow-up turns and succeed when all slots are provided', async () => {
-    const initRes = await orchestrator.processRequest({
-      query: '상사랑 점심 1시간',
+  it('should return initial results with one visible recommendation and full candidate pool', async () => {
+    const { orchestrator, gimel } = createOrchestrator();
+
+    const res = await orchestrator.processRequest({
+      query: '친구랑 60분 안에 조용한 점심',
       mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
+      userLocation: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' }
     });
 
-    expect(initRes.status).toBe('questions');
-    const sessionId = initRes.sessionId;
+    expect(res.status).toBe('results');
+    expect(res.currentRecommendation).toBeDefined();
+    expect(res.results).toHaveLength(1);
+    expect(res.currentRecommendation.id).toBe('p-1');
+    expect(res.candidatePool).toHaveLength(5);
+    expect(res.eligibleCount).toBe(5);
+    expect(gimel.generateReasons).toHaveBeenCalledTimes(1);
 
-    const followUpRes = await orchestrator.processAnswers(sessionId, {
+    const session = sessions.get(res.sessionId);
+    expect(session.dislikedCandidateIds).toEqual([]);
+    expect(session.likedCandidateIds).toEqual([]);
+  });
+
+  it('should advance to next recommendation on first dislike and reveal full remaining pool on second dislike', async () => {
+    const { orchestrator } = createOrchestrator();
+
+    const initial = await orchestrator.processRequest({
+      query: '친구랑 60분 안에 조용한 점심',
+      mode: 'normal',
+      userLocation: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' }
+    });
+
+    const sessionId = initial.sessionId;
+
+    const afterFirstDislike = await orchestrator.processAnswers(sessionId, {
       answers: {
-        transportMode: 'walk',
-        budgetPerPersonKrw: 10000,
-        vibe: '조용한',
-        excludedFoods: []
+        action: 'dislike'
       }
     });
 
-    expect(followUpRes.status).toBe('results');
-    expect(followUpRes.results).toHaveLength(1);
-    expect(followUpRes.candidatePool).toHaveLength(2);
-    expect(followUpRes.currentRecommendation?.name).toBeTruthy();
-    const names = followUpRes.candidatePool.map((r) => r.name);
-    expect(names).toContain('든든한국밥');
-    expect(names).toContain('깔끔초밥');
-  });
+    expect(afterFirstDislike.status).toBe('results');
+    expect(afterFirstDislike.results).toHaveLength(1);
+    expect(afterFirstDislike.currentRecommendation.id).toBe('p-2');
 
-  it('should trigger session expired error on the third turn (exceeding 2 follow-ups)', async () => {
-    const initRes = await orchestrator.processRequest({
-      query: '상사랑 점심 1시간',
-      mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
-    });
-
-    expect(initRes.status).toBe('questions');
-    const sessionId = initRes.sessionId;
-
-    const turn1Res = await orchestrator.processAnswers(sessionId, {
+    const afterSecondDislike = await orchestrator.processAnswers(sessionId, {
       answers: {
-        transportMode: 'walk'
+        action: 'dislike'
       }
     });
-    expect(turn1Res.status).toBe('questions');
 
-    const turn2Res = await orchestrator.processAnswers(sessionId, {
+    expect(afterSecondDislike.status).toBe('results');
+    expect(afterSecondDislike.results).toHaveLength(3);
+    expect(afterSecondDislike.currentRecommendation.id).toBe('p-3');
+    expect(afterSecondDislike.candidatePool).toHaveLength(3);
+
+    const session = sessions.get(sessionId);
+    expect(session.dislikedCandidateIds).toEqual(['p-1', 'p-2']);
+    expect(session.feedbackDislikeCount).toBe(2);
+  });
+
+  it('should persist like/dislike identifiers in session state', async () => {
+    const { orchestrator } = createOrchestrator();
+
+    const initial = await orchestrator.processRequest({
+      query: '친구랑 60분 안에 조용한 점심',
+      mode: 'normal',
+      userLocation: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' }
+    });
+
+    const sessionId = initial.sessionId;
+
+    await orchestrator.processAnswers(sessionId, {
       answers: {
-        budgetPerPersonKrw: 10000
+        action: 'like',
+        candidateId: 'p-1'
       }
     });
-    expect(turn2Res.status).toBe('error');
-    expect(turn2Res.code).toBe(ErrorCodes.SESSION_EXPIRED);
+
+    await orchestrator.processAnswers(sessionId, {
+      answers: {
+        action: 'dislike',
+        candidateId: 'p-2'
+      }
+    });
+
+    const session = sessions.get(sessionId);
+    expect(session.likedCandidateIds).toContain('p-1');
+    expect(session.dislikedCandidateIds).toContain('p-2');
+    expect(session.dislikedCandidateIds).not.toContain('p-1');
   });
 
-  it('should advance sequential recommendations on dislike and reveal the full pool after two dislikes', async () => {
-    const initRes = await orchestrator.processRequest({
-      query: '상사 점심 1시간 도보 1만원 조용한 없음',
+  it('should not recommend an already disliked candidate again in the same session', async () => {
+    const { orchestrator } = createOrchestrator();
+
+    const initial = await orchestrator.processRequest({
+      query: '친구랑 60분 안에 조용한 점심',
       mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
+      userLocation: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' }
+    });
+    const { sessionId } = initial;
+
+    await orchestrator.processAnswers(sessionId, {
+      answers: {
+        action: 'dislike'
+      }
     });
 
-    expect(initRes.status).toBe('results');
-    expect(initRes.results).toHaveLength(1);
-    expect(initRes.showFullPool).toBe(false);
-
-    const firstDislike = await orchestrator.processFeedback(initRes.sessionId, {
-      action: 'dislike',
-      candidateId: initRes.currentRecommendation.id
+    const afterSecondDislike = await orchestrator.processAnswers(sessionId, {
+      answers: {
+        action: 'dislike'
+      }
     });
 
-    expect(firstDislike.status).toBe('results');
-    expect(firstDislike.results).toHaveLength(1);
-    expect(firstDislike.currentRecommendation.name).not.toBe(
-      initRes.currentRecommendation.name
-    );
-    expect(firstDislike.showFullPool).toBe(false);
-
-    const secondDislike = await orchestrator.processFeedback(initRes.sessionId, {
-      action: 'dislike',
-      candidateId: firstDislike.currentRecommendation.id
-    });
-
-    expect(secondDislike.status).toBe('results');
-    expect(secondDislike.showFullPool).toBe(true);
-    expect(secondDislike.candidatePool).toHaveLength(2);
-    expect(secondDislike.results).toHaveLength(2);
+    const seenIds = afterSecondDislike.results.map((candidate) => candidate.id);
+    expect(seenIds).not.toContain('p-1');
+    expect(seenIds).not.toContain('p-2');
   });
 
-  it('should strictly ground explanations and filter coordinates from LLM input', async () => {
-    vi.stubEnv('OPENAI_API_KEY', 'mock-key');
+  it('should return SESSION_EXPIRED for unknown sessions', async () => {
+    const { orchestrator } = createOrchestrator();
 
-    const fetchMock = vi.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [
-              {
-                message: {
-                  content:
-                    '이 한식당은 상사와의 점심 식사에 제격인 조용한 분위기를 자랑합니다.'
-                }
-              }
-            ]
-          })
-      })
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const initRes = await orchestrator.processRequest({
-      query: '상사 점심 1시간 도보 1만원 조용한 없음',
-      mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
+    const missing = await orchestrator.processAnswers('unknown-session', {
+      answers: { transportMode: 'walk' }
     });
 
-    expect(initRes.status).toBe('results');
-    expect(initRes.results[0].reason).toBeTruthy();
-    expect(initRes.results[0].location).toBeDefined();
-    expect(initRes.currentRecommendation.reason).toBe(
-      initRes.results[0].reason
-    );
+    expect(missing.status).toBe('error');
+    expect(missing.code).toBe(ErrorCodes.SESSION_EXPIRED);
   });
 
-  it('should enforce 30-minute session TTL', async () => {
-    const initRes = await orchestrator.processRequest({
-      query: '상사랑 점심 1시간',
-      mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
+  it('should return an error when Aleph rejects answers with invalid values', async () => {
+    const { orchestrator } = createOrchestrator({
+      parseResult: {
+        status: 'complete',
+        slots: defaultSlots
+      },
+      answerResult: {
+        status: 'error',
+        code: ErrorCodes.INVALID_TOTAL_TIME,
+        message: 'Total time must be between 20 and 60 minutes.',
+        missingFields: []
+      }
     });
 
-    const sessionId = initRes.sessionId;
-    expect(sessions.get(sessionId)).toBeDefined();
+    const init = await orchestrator.processRequest({
+      query: '친구랑 점심',
+      mode: 'normal',
+      userLocation: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' }
+    });
 
-    vi.advanceTimersByTime(31 * 60 * 1000);
+    const res = await orchestrator.processAnswers(init.sessionId, {
+      answers: { action: 'invalid' }
+    });
 
-    expect(sessions.get(sessionId)).toBeNull();
+    const answersSession = sessions.get(init.sessionId);
+    expect(answersSession).toBeDefined();
+    expect(res.status).toBe('error');
+    expect(res.code).toBe(ErrorCodes.INVALID_TOTAL_TIME);
   });
 
-  it('should generate grounded fallback explanations deterministically', () => {
-    const candidate = {
-      name: '든든한국밥',
-      category: '한식',
-      transportMode: 'walk',
-      oneWayRouteMinutes: 5,
-      totalExpectedMinutes: 40
-    };
-    const slots = {
-      partyContext: '상사',
-      vibe: '조용한'
-    };
+  it('should propagate Bet NO_RESULTS with correct status and code', async () => {
+    const { orchestrator, bet } = createOrchestrator({
+      parseResult: {
+        status: 'complete',
+        slots: defaultSlots
+      }
+    });
 
-    const explanation = generateGroundedExplanationFallback(candidate, slots);
-    expect(explanation).toContain('현재 위치에서 도보 5분 거리(왕복 10분)');
-    expect(explanation).toContain('한식 음식점인 든든한국밥');
-    expect(explanation).toContain(
-      '조용한 분위기에서 상사와 함께 식사하시기에 아주 적합하여 추천합니다.'
-    );
-  });
+    bet.search.mockResolvedValueOnce({
+      status: 'error',
+      code: ErrorCodes.NO_RESULTS,
+      message: 'No candidates',
+      missingFields: []
+    });
 
-  it('should apply the exact fixed radii defined in the plan based on mode + transport mode', async () => {
-    const spy = vi.spyOn(
-      KakaoLocalAdapter.prototype,
-      'searchNearbyRestaurants'
-    );
-
-    await orchestrator.processRequest({
-      query: '강남 점심 1시간 도보 1만원 혼밥 조용한 룸식당 제외음식 없음',
+    const res = await orchestrator.processRequest({
+      query: '친구랑 60분 안에 조용한 점심',
       mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
+      userLocation: { lat: 37.4979, lng: 127.0276, source: 'browser-geolocation' }
     });
-    expect(spy).toHaveBeenCalledWith(37.4979, 127.0276, 1000);
-    spy.mockClear();
-    cache.clear();
 
-    await orchestrator.processRequest({
-      query: '강남 점심 1시간 차량 1만원 혼밥 조용한 룸식당 제외음식 없음',
-      mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
-    });
-    expect(spy).toHaveBeenCalledWith(37.4979, 127.0276, 5000);
-    spy.mockClear();
-    cache.clear();
-
-    await orchestrator.processRequest({
-      query: '강남 저녁 회식 1시간 도보 1만원 혼밥 조용한 룸식당 제외음식 없음',
-      mode: 'travel',
-      userLocation: { lat: 37.4979, lng: 127.0276 },
-      selectedLocation: { coords: { lat: 37.4979, lng: 127.0276 } }
-    });
-    expect(spy).toHaveBeenCalledWith(37.4979, 127.0276, 2000);
-    spy.mockClear();
-    cache.clear();
-
-    await orchestrator.processRequest({
-      query: '강남 저녁 회식 1시간 차량 1만원 혼밥 조용한 룸식당 제외음식 없음',
-      mode: 'travel',
-      userLocation: { lat: 37.4979, lng: 127.0276 },
-      selectedLocation: { coords: { lat: 37.4979, lng: 127.0276 } }
-    });
-    expect(spy).toHaveBeenCalledWith(37.4979, 127.0276, 10000);
-    spy.mockClear();
-    cache.clear();
-
-    await orchestrator.processRequest({
-      query: '상사랑 점심 1시간 차량 1만원 조용한 없음',
-      mode: 'normal',
-      userLocation: { lat: 37.4979, lng: 127.0276 }
-    });
-    expect(spy).toHaveBeenCalledWith(37.4979, 127.0276, 5000);
-    spy.mockClear();
-    cache.clear();
-
-    await orchestrator.processRequest({
-      query: '출장 상사 점심 1시간 도보 1만원 조용한 없음',
-      mode: 'travel',
-      userLocation: { lat: 37.4979, lng: 127.0276 },
-      selectedLocation: { coords: { lat: 37.4979, lng: 127.0276 } }
-    });
-    expect(spy).toHaveBeenCalledWith(37.4979, 127.0276, 2000);
-    spy.mockClear();
-    cache.clear();
-
-    await orchestrator.processRequest({
-      query: '출장 상사 점심 1시간 차량 1만원 조용한 없음',
-      mode: 'travel',
-      userLocation: { lat: 37.4979, lng: 127.0276 },
-      selectedLocation: { coords: { lat: 37.4979, lng: 127.0276 } }
-    });
-    expect(spy).toHaveBeenCalledWith(37.4979, 127.0276, 10000);
-    spy.mockClear();
-    cache.clear();
+    expect(res.status).toBe('error');
+    expect(res.code).toBe(ErrorCodes.NO_RESULTS);
   });
 });

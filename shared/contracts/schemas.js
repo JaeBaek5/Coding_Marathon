@@ -80,6 +80,13 @@ export const CanonicalCollegeStudentPromptFixtureSchema = z
   })
   .strict();
 
+export const VenuePreference = {
+  RESTAURANT: 'restaurant',
+  CAFE: 'cafe',
+  BAR: 'bar',
+  ANY: 'any'
+};
+
 export const SlotSchema = z.object({
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]),
   mealPeriod: z.enum([
@@ -99,6 +106,14 @@ export const SlotSchema = z.object({
   partyContext: z.string(),
   vibe: z.string(),
   location: CoordinateSchema,
+  venuePreference: z
+    .enum([
+      VenuePreference.RESTAURANT,
+      VenuePreference.CAFE,
+      VenuePreference.BAR,
+      VenuePreference.ANY
+    ])
+    .optional(),
   jobContext: z.string().optional().nullable(),
   ageGroup: z.string().optional().nullable()
 });
@@ -106,20 +121,10 @@ export const SlotSchema = z.object({
 export const RecommendationRequestSchema = z.object({
   query: z.string().min(1, 'Query is required'),
   mode: z.enum([Mode.NORMAL, Mode.TRAVEL]).default(Mode.NORMAL),
-  userLocation: z
-    .union([LocationPayloadSchema, CoordinateSchema])
-    .optional()
-    .nullable(),
+  location: LocationPayloadSchema.optional().nullable(),
+  userLocation: CoordinateSchema.optional().nullable(),
   selectedLocation: z
-    .union([
-      LocationPayloadSchema,
-      CoordinateSchema,
-      z.object({
-        coords: z.union([LocationPayloadSchema, CoordinateSchema]),
-        name: z.string().optional(),
-        address: z.string().optional()
-      })
-    ])
+    .union([CoordinateSchema, z.object({ coords: CoordinateSchema })])
     .optional()
     .nullable(),
   now: z.string().datetime({ offset: true }).optional().nullable()
@@ -127,11 +132,6 @@ export const RecommendationRequestSchema = z.object({
 
 export const AnswersRequestSchema = z.object({
   answers: z.record(z.any())
-});
-
-export const FeedbackRequestSchema = z.object({
-  action: z.enum(['like', 'dislike']),
-  candidateId: z.string().min(1)
 });
 
 export const NormalizedRouteSchema = z.object({
@@ -268,6 +268,15 @@ export const AlephParseOutputSchema = z.object({
   partyContext: z.string().nullable().default(null),
   vibe: z.string().nullable().default(null),
   location: CoordinateSchema.nullable().default(null),
+  venuePreference: z
+    .enum([
+      VenuePreference.RESTAURANT,
+      VenuePreference.CAFE,
+      VenuePreference.BAR,
+      VenuePreference.ANY
+    ])
+    .nullable()
+    .default(null),
   jobContext: z.string().nullable().default(null),
   ageGroup: z.string().nullable().default(null)
 });

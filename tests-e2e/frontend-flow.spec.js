@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Mumuk Frontend Flow', () => {
+  let recommendationRequest;
+
   test.beforeEach(async ({ page, context }) => {
     await context.grantPermissions(['geolocation']);
     await context.setGeolocation({ latitude: 37.4979, longitude: 127.0276 });
@@ -18,7 +20,10 @@ test.describe('Mumuk Frontend Flow', () => {
       });
     });
 
+    recommendationRequest = null;
+
     await page.route('**/api/recommendations', async (route) => {
+      recommendationRequest = route.request().postDataJSON();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -108,6 +113,15 @@ test.describe('Mumuk Frontend Flow', () => {
     const submitAnswersBtn = page.locator('.submit-answers-btn');
     await expect(submitAnswersBtn).toBeVisible();
     await submitAnswersBtn.click();
+
+    expect(recommendationRequest).toMatchObject({
+      mode: 'normal',
+      location: {
+        lat: 37.4979,
+        lng: 127.0276,
+        source: 'browser-geolocation'
+      }
+    });
 
     const resultsTitle = page.locator('.results-list-container h2');
     await expect(resultsTitle).toContainText('추천 식당');
@@ -217,5 +231,44 @@ test.describe('Mumuk Frontend Flow', () => {
     await resultItem.click();
 
     await expect(submitBtn).toBeEnabled();
+  });
+
+  test('should send manual travel location as structured payload in travel mode', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+
+    await page.route('**/api/location-search?q=*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            name: '테스트 출발지',
+            address: '서울시 강남구 테스트로 1',
+            coords: { lat: 37.4979, lng: 127.0276 }
+          }
+        ])
+      });
+    });
+
+    await page.locator('.mode-selector .pill-select').nth(1).click();
+    await page.locator('#location-search-input').fill('테스트 출발지');
+    await page.locator('.search-result-item').click();
+
+    const textarea = page.locator('#query-text-area');
+    await textarea.fill('점심에 뭐 먹을까');
+
+    await page.locator('.submit-btn').click();
+
+    expect(recommendationRequest).toMatchObject({
+      mode: 'travel',
+      location: {
+        source: 'manual-location',
+        lat: 37.4979,
+        lng: 127.0276
+      }
+    });
   });
 });

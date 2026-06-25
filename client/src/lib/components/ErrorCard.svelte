@@ -2,8 +2,7 @@
   const { error, session } = $props();
 
   function switchToTravelMode() {
-    session.reset();
-    session.mode = 'travel';
+    session.switchToTravelMode();
   }
 
   function handleReset() {

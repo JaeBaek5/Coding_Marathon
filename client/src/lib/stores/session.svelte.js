@@ -7,9 +7,6 @@ export function createSessionStore() {
   let missingFields = $state([]);
   let questions = $state([]);
   let results = $state([]);
-  let currentRecommendation = $state(null);
-  let candidatePool = $state([]);
-  let showFullPool = $state(false);
   let error = $state(null);
   let loading = $state(false);
   let userLocation = $state(null);
@@ -27,9 +24,6 @@ export function createSessionStore() {
     missingFields = [];
     questions = [];
     results = [];
-    currentRecommendation = null;
-    candidatePool = [];
-    showFullPool = false;
     error = null;
     loading = false;
     userLocation = null;
@@ -39,11 +33,27 @@ export function createSessionStore() {
     activeResultIndex = 0;
   }
 
+  function switchToTravelMode() {
+    status = 'initial';
+    mode = 'travel';
+    error = null;
+    loading = false;
+    selectedLocation = null;
+    userLocation = null;
+    answers = {};
+    missingFields = [];
+    questions = [];
+    results = [];
+    locationResults = [];
+    activeResultIndex = 0;
+  }
+
   async function getGeolocation() {
     if (!navigator.geolocation) {
       error = {
         code: 'UNSUPPORTED_BROWSER',
-        message: '이 브라우저는 위치 정보를 지원하지 않습니다.'
+        message:
+          '이 브라우저는 위치 권한 API를 지원하지 않습니다. 수동 위치 선택으로 진행하세요.'
       };
       status = 'error';
       return null;
@@ -52,12 +62,15 @@ export function createSessionStore() {
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          const coords = position.coords;
           const loc = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracyMeters: position.coords.accuracy ?? null,
+            lat: coords.latitude,
+            lng: coords.longitude,
             source: 'browser-geolocation'
           };
+          if (typeof coords.accuracy === 'number') {
+            loc.accuracyMeters = coords.accuracy;
+          }
           userLocation = loc;
           resolve(loc);
         },
@@ -65,7 +78,7 @@ export function createSessionStore() {
           error = {
             code: 'GEO_REQUIRED',
             message:
-              '현재 위치 정보를 가져올 수 없습니다. 출장/여행 모드로 변경하여 검색해 보세요.'
+              '현재 위치 권한이 거부되어 추천을 시작할 수 없습니다. 이동/여행 모드로 전환해 수동으로 위치를 선택하세요.'
           };
           status = 'error';
           resolve(null);
@@ -94,53 +107,85 @@ export function createSessionStore() {
     }
   }
 
+  function buildLocationPayload() {
+    if (mode === 'travel' && selectedLocation?.coords) {
+      return {
+        lat: selectedLocation.coords.lat,
+        lng: selectedLocation.coords.lng,
+        source: selectedLocation.source || 'manual-location',
+        accuracyMeters: selectedLocation.accuracyMeters
+      };
+    }
+
+    if (userLocation) {
+      return {
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        source: userLocation.source || 'browser-geolocation',
+        accuracyMeters: userLocation.accuracyMeters
+      };
+    }
+
+    return null;
+  }
+
   async function submitQuery() {
     if (!query.trim()) return;
     loading = true;
     error = null;
 
-    let locationToUse = null;
     if (mode === 'normal') {
-      locationToUse = await getGeolocation();
-      if (!locationToUse) {
+      const browserLocation = await getGeolocation();
+      if (!browserLocation) {
         loading = false;
         return;
       }
-    } else {
-      if (!selectedLocation) {
-        error = {
-          code: 'GEO_REQUIRED',
-          message:
-            '출장/여행 모드에서는 먼저 가실 위치를 검색 후 선택해 주세요.'
-        };
-        status = 'error';
-        loading = false;
-        return;
-      }
-      locationToUse = selectedLocation.coords;
+    } else if (!selectedLocation) {
+      error = {
+        code: 'GEO_REQUIRED',
+        message:
+          '이동/여행 모드에서는 수동 위치 선택이 필요합니다. 출발지 후보를 먼저 선택하세요.'
+      };
+      status = 'error';
+      loading = false;
+      return;
+    }
+
+    const requestLocation = buildLocationPayload();
+    if (!requestLocation) {
+      error = {
+        code: 'GEO_REQUIRED',
+        message:
+          '유효한 위치 정보를 가져오지 못했습니다. 위치를 다시 확인 후 재요청하세요.'
+      };
+      status = 'error';
+      loading = false;
+      return;
     }
 
     try {
-      const selectedLocationPayload =
-        mode === 'travel' && selectedLocation
-          ? {
-              coords: {
-                ...selectedLocation.coords,
-                source: 'selected-location'
-              },
-              name: selectedLocation.name,
-              address: selectedLocation.address
-            }
-          : null;
-
       const response = await fetch('/api/recommendations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: query.trim(),
           mode,
-          userLocation: mode === 'normal' ? locationToUse : null,
-          selectedLocation: selectedLocationPayload,
+          location: requestLocation,
+          userLocation:
+            mode === 'normal'
+              ? {
+                  lat: requestLocation.lat,
+                  lng: requestLocation.lng
+                }
+              : null,
+          selectedLocation:
+            mode === 'travel' && selectedLocation
+              ? {
+                  ...selectedLocation.coords,
+                  name: selectedLocation.name,
+                  address: selectedLocation.address
+                }
+              : null,
           now: new Date().toISOString()
         })
       });
@@ -151,15 +196,14 @@ export function createSessionStore() {
       } else {
         error = {
           code: data.code || 'PROVIDER_ERROR',
-          message: data.message || '추천 서비스 호출에 실패했습니다.'
+          message: data.message || '추천 요청 처리 중 문제가 발생했습니다.'
         };
         status = 'error';
       }
     } catch {
       error = {
         code: 'PROVIDER_ERROR',
-        message:
-          '서버와 통신하는 도중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
+        message: '서버와 연결할 수 없습니다. 잠시 후 다시 시도하세요.'
       };
       status = 'error';
     } finally {
@@ -167,7 +211,7 @@ export function createSessionStore() {
     }
   }
 
-  async function submitAnswers() {
+  async function submitAnswersWithPayload(answerPayload) {
     if (!sessionId) return;
     loading = true;
     error = null;
@@ -176,7 +220,7 @@ export function createSessionStore() {
       const response = await fetch(`/api/sessions/${sessionId}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers })
+        body: JSON.stringify({ answers: answerPayload })
       });
 
       const data = await response.json();
@@ -185,20 +229,30 @@ export function createSessionStore() {
       } else {
         error = {
           code: data.code || 'PROVIDER_ERROR',
-          message: data.message || '답변 제출에 실패했습니다.'
+          message: data.message || '답변 처리 중 문제가 발생했습니다.'
         };
         status = 'error';
       }
     } catch {
       error = {
         code: 'PROVIDER_ERROR',
-        message:
-          '서버와 통신하는 도중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
+        message: '서버와 연결할 수 없습니다. 잠시 후 다시 시도하세요.'
       };
       status = 'error';
     } finally {
       loading = false;
     }
+  }
+
+  async function submitAnswers() {
+    return submitAnswersWithPayload(answers);
+  }
+
+  function submitFeedback(action, candidateId) {
+    return submitAnswersWithPayload({
+      action: String(action || '').toLowerCase(),
+      ...(candidateId ? { candidateId } : {})
+    });
   }
 
   function handleApiResponse(data) {
@@ -221,9 +275,6 @@ export function createSessionStore() {
       sessionId = data.sessionId;
       status = 'results';
       results = data.results || [];
-      currentRecommendation = data.currentRecommendation || results[0] || null;
-      candidatePool = data.candidatePool || results;
-      showFullPool = Boolean(data.showFullPool);
       activeResultIndex = 0;
     } else if (data.status === 'error') {
       error = {
@@ -232,40 +283,6 @@ export function createSessionStore() {
         missingFields: data.missingFields || []
       };
       status = 'error';
-    }
-  }
-
-  async function submitFeedback(action, candidateId) {
-    if (!sessionId || !candidateId) return;
-    loading = true;
-    error = null;
-
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, candidateId })
-      });
-
-      const data = await response.json();
-      if (response.ok || data.status) {
-        handleApiResponse(data);
-      } else {
-        error = {
-          code: data.code || 'PROVIDER_ERROR',
-          message: data.message || '피드백 제출에 실패했습니다.'
-        };
-        status = 'error';
-      }
-    } catch {
-      error = {
-        code: 'PROVIDER_ERROR',
-        message:
-          '서버와 통신하는 도중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
-      };
-      status = 'error';
-    } finally {
-      loading = false;
     }
   }
 
@@ -303,24 +320,6 @@ export function createSessionStore() {
     get results() {
       return results;
     },
-    get currentRecommendation() {
-      return currentRecommendation;
-    },
-    get candidatePool() {
-      return candidatePool;
-    },
-    get showFullPool() {
-      return showFullPool;
-    },
-    get displayResults() {
-      if (showFullPool) {
-        return candidatePool;
-      }
-      if (currentRecommendation) {
-        return [currentRecommendation];
-      }
-      return results;
-    },
     get error() {
       return error;
     },
@@ -355,9 +354,11 @@ export function createSessionStore() {
       activeResultIndex = val;
     },
     reset,
+    switchToTravelMode,
     searchLocation,
     submitQuery,
     submitAnswers,
-    submitFeedback
+    submitFeedback,
+    submitAnswersWithPayload
   };
 }

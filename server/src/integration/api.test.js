@@ -233,7 +233,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
       const res = await request(app)
         .post('/api/recommendations')
         .send({
-          query: '상사랑 점심 40분 도보 1만원 조용한 분위기 제외음식없음',
+          query: '친구랑 조용한 분위기로 점심 먹으려고 해. 60분, 도보, 예산 12000원, 매운 음식 제외하고',
           mode: 'normal',
           userLocation: { lat: 37.4979, lng: 127.0276 }
         })
@@ -288,6 +288,7 @@ describe('HTTP API Endpoints Integration Tests', () => {
           answers: {
             transportMode: 'walk',
             budgetPerPersonKrw: 10000,
+            partyContext: '친구',
             vibe: '조용한',
             excludedFoods: []
           }

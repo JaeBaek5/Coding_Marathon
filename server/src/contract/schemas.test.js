@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  RecommendationRequestSchema,
   SlotSchema,
   RecommendationResponseSchema,
   QuestionsResponseSchema,
@@ -169,6 +170,23 @@ describe('Domain Contracts & Schemas Validation', () => {
 
     const result = SlotSchema.safeParse(validSlot);
     expect(result.success).toBe(true);
+  });
+
+  it('should accept requests with structured location payload', () => {
+    const result = RecommendationRequestSchema.safeParse({
+      query: '친구와 점심 추천해줘',
+      mode: 'normal',
+      location: {
+        lat: 37.5665,
+        lng: 126.978,
+        accuracyMeters: 25,
+        source: 'browser-geolocation'
+      }
+    });
+    expect(result.success).toBe(true);
+    expect(result.data.location).toMatchObject({
+      source: 'browser-geolocation'
+    });
   });
 
   it('should successfully validate the invalid-time fixture', async () => {
