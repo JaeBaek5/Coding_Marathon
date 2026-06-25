@@ -2,6 +2,8 @@
 
 Multi-agent restaurant recommendation web app with a Svelte client and Express backend.
 
+> 🇰🇷 한국어 버전: [README.ko.md](README.ko.md)
+
 ## Documentation
 
 | Document | What it covers |
