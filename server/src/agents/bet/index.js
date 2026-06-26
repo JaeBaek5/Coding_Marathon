@@ -24,6 +24,8 @@ import {
   deriveFoodPreferenceScores
 } from '../../utils/foodPreference.js';
 import { resolveTotalTimeMinutesHeuristic } from '../../services/slotExceptionResolver.js';
+import { selectCandidatesForRouting } from '../../utils/candidateSelection.js';
+import { resolveSearchRadiusMeters } from '../../../../shared/contracts/travelRange.js';
 import {
   FAST_MODE,
   BET_ROUTE_CANDIDATE_LIMIT_FAST,
@@ -70,12 +72,12 @@ function createErrorResult(code, message, metadata = {}) {
   };
 }
 
-export function getSearchRadius(mode, transportMode) {
-  if (mode === 'normal') {
-    return transportMode === 'walk' ? 1000 : 5000;
-  }
-
-  return transportMode === 'walk' ? 2000 : 10000;
+export function getSearchRadius(mode, transportMode, totalTimeMinutes) {
+  return resolveSearchRadiusMeters({
+    mode,
+    transportMode,
+    totalTimeMinutes
+  });
 }
 
 import { mapWithConcurrencyLimit } from '../../utils/concurrency.js';
@@ -102,7 +104,7 @@ export class BetAgent {
       excludeCandidateIds = []
     } = options;
     const dislikedProfiles = options.dislikedProfiles || [];
-    const { mode, transportMode, location, desiredFoods = [], searchKeywords = [], venuePreference, foodPreferenceScores = [] } =
+    const { mode, transportMode, location, desiredFoods = [], searchKeywords = [], venuePreference, foodPreferenceScores = [], venueIntentExplicit } =
       slots;
     let { totalTimeMinutes } = slots;
     const normalizedDesiredFoods = Array.isArray(desiredFoods) ? desiredFoods : [];
@@ -121,7 +123,6 @@ export class BetAgent {
             normalizedDesiredFoods,
             Array.isArray(searchKeywords) ? searchKeywords : []
           );
-    const searchRadius = getSearchRadius(mode, transportMode);
     const normalizedTopN = normalizePositiveInteger(topN, DEFAULT_TOP_N);
     const normalizedRouteConcurrency = normalizePositiveInteger(
       routeConcurrency,
@@ -141,20 +142,12 @@ export class BetAgent {
     const activeRouteConcurrency = fastMode
       ? BET_ROUTE_CONCURRENCY_FAST
       : normalizedRouteConcurrency;
-    const candidateWindowLimit = Math.min(
-      normalizedDesiredFoods.length > 0 ? 25 : DEFAULT_NEARBY_CANDIDATE_WINDOW,
-      effectiveRouteLimit
-    );
-    const metadata = {
-      searchRadiusMeters: searchRadius,
-      requestedTopN: normalizedTopN,
-      routeConcurrency: normalizedRouteConcurrency,
-      routeCandidateLimit: normalizedRouteCandidateLimit,
-      candidateWindowLimit,
-      rawCandidateCount: 0,
-      routedCandidateCount: 0,
-      routeFailureCount: 0
-    };
+    const hasFoodIntent =
+      normalizedDesiredFoods.length > 0 || normalizedSearchKeywords.length > 0;
+    const routingPoolLimit = hasFoodIntent
+      ? 25
+      : DEFAULT_NEARBY_CANDIDATE_WINDOW;
+    const candidateWindowLimit = Math.min(routingPoolLimit, effectiveRouteLimit);
 
     try {
       validateTimeBudget(totalTimeMinutes);
@@ -168,10 +161,31 @@ export class BetAgent {
         return createErrorResult(
           error.code || ErrorCodes.INVALID_TOTAL_TIME,
           error.message,
-          metadata
+          {
+            searchRadiusMeters: getSearchRadius(mode, transportMode, totalTimeMinutes),
+            requestedTopN: normalizedTopN,
+            routeConcurrency: normalizedRouteConcurrency,
+            routeCandidateLimit: normalizedRouteCandidateLimit,
+            candidateWindowLimit,
+            rawCandidateCount: 0,
+            routedCandidateCount: 0,
+            routeFailureCount: 0
+          }
         );
       }
     }
+
+    const searchRadius = getSearchRadius(mode, transportMode, totalTimeMinutes);
+    const metadata = {
+      searchRadiusMeters: searchRadius,
+      requestedTopN: normalizedTopN,
+      routeConcurrency: normalizedRouteConcurrency,
+      routeCandidateLimit: normalizedRouteCandidateLimit,
+      candidateWindowLimit,
+      rawCandidateCount: 0,
+      routedCandidateCount: 0,
+      routeFailureCount: 0
+    };
 
     this.dependencies.logger.info('Bet search started', {
       event: 'bet_search_started',
@@ -234,8 +248,14 @@ export class BetAgent {
     const normalizedCandidates = Array.isArray(nearbyCandidates)
       ? nearbyCandidates
       : [];
-    const candidatesForRouting = normalizedCandidates.slice(
-      0,
+    const candidatesForRouting = selectCandidatesForRouting(
+      normalizedCandidates,
+      {
+        desiredFoods: normalizedDesiredFoods,
+        searchKeywords: normalizedSearchKeywords,
+        venuePreference: venuePreference || 'restaurant',
+        venueIntentExplicit
+      },
       candidateWindowLimit
     );
     const searchMetadata = {

@@ -188,6 +188,16 @@ export const RecommendationRequestSchema = z.object({
     .union([CoordinateSchema, z.object({ coords: CoordinateSchema })])
     .optional()
     .nullable(),
+  likedProfiles: z
+    .array(
+      z.object({
+        id: z.string().optional().nullable(),
+        name: z.string().optional().nullable(),
+        category: z.string().optional().nullable()
+      })
+    )
+    .max(50)
+    .optional(),
   now: z.string().datetime({ offset: true }).optional().nullable()
 });
 
@@ -204,6 +214,11 @@ export const NormalizedRouteSchema = z.object({
   durationMinutes: z.number().int().nonnegative(),
   distanceMeters: z.number().int().nonnegative(),
   path: z.array(CoordinateSchema)
+});
+
+export const MenuItemSchema = z.object({
+  name: z.string().min(1),
+  price: z.string().nullable().optional()
 });
 
 export const NormalizedCandidateSchema = z.object({
@@ -234,7 +249,10 @@ export const NormalizedCandidateSchema = z.object({
   reason: z.string(),
   providerAttribution: z.string(),
   openStatus: z.boolean().nullable().default(null),
-  path: z.array(CoordinateSchema).optional()
+  path: z.array(CoordinateSchema).optional(),
+  mainPhoto: z.string().url().nullable().optional(),
+  menuBoardPhoto: z.string().url().nullable().optional(),
+  menuItems: z.array(MenuItemSchema).max(20).optional()
 });
 
 export const OrchestratorDecisionOutputSchema = z
@@ -452,7 +470,10 @@ export const ReviewExtractionOutputSchema = z
     reviewSnippets: z.array(z.string()),
     extractionMethod: z.enum(['browser', 'static-hydration', 'unavailable']),
     fetchedAt: z.string().datetime({ offset: true }),
-    error: z.string().nullable()
+    error: z.string().nullable(),
+    mainPhoto: z.string().url().nullable().optional(),
+    menuBoardPhoto: z.string().url().nullable().optional(),
+    menuItems: z.array(MenuItemSchema).max(20).optional()
   })
   .strict();
 

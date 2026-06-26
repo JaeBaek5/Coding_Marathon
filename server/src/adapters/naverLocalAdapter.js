@@ -80,7 +80,40 @@ export class NaverLocalAdapter {
       }
     }
 
+    for (const result of body.results || []) {
+      const region = result.region || {};
+      const city = [region.area1?.name, region.area2?.name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      if (city) {
+        return city;
+      }
+    }
+
     throw new Error('Naver reverse geocode returned no area');
+  }
+
+  resolveSearchAreaLabel(areaLabel, radiusMeters = 1000) {
+    const normalized = String(areaLabel || '').trim();
+    if (!normalized) {
+      return normalized;
+    }
+
+    if (radiusMeters >= 8000) {
+      const city = normalized.split(/\s+/)[0];
+      return city || normalized;
+    }
+
+    return normalized;
+  }
+
+  resolveDisplayPerQuery(radiusMeters = 1000, hasFoodIntent = false) {
+    if (hasFoodIntent) {
+      return radiusMeters >= 15000 ? 15 : 10;
+    }
+
+    return radiusMeters >= 15000 ? 10 : 5;
   }
 
   async searchLocal(query, display = 5) {
@@ -130,8 +163,10 @@ export class NaverLocalAdapter {
       venuePreference,
       expandFoodSearchSuffixes
     });
-    const displayPerQuery =
-      desiredFoods.length > 0 || searchKeywords.length > 0 ? 10 : 5;
+    const displayPerQuery = this.resolveDisplayPerQuery(
+      radius,
+      desiredFoods.length > 0 || searchKeywords.length > 0
+    );
     if (!hasSearchCredentials()) {
       if (shouldUseTestFixtures()) {
         const fixture = await loadFixture('naver-local-items.json');
@@ -144,7 +179,8 @@ export class NaverLocalAdapter {
       throw missingSearchCredentialsError();
     }
 
-    const area = await this.reverseGeocode(lat, lng);
+    const areaLabel = await this.reverseGeocode(lat, lng);
+    const area = this.resolveSearchAreaLabel(areaLabel, radius);
     const seen = new Set();
     const items = [];
 

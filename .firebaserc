@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "dodak-01"
+  },
+  "targets": {
+    "dodak-01": {
+      "hosting": {
+        "mumuk": [
+          "mumuk-dodak-01"
+        ]
+      }
+    }
+  }
+}

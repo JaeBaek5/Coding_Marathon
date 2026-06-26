@@ -8,6 +8,19 @@ function stripHtml(value) {
   return String(value || '').replace(/<\/?b>/gi, '');
 }
 
+function buildStableCandidateId({ title, lat, lng, link }) {
+  const normalizedLink = typeof link === 'string' ? link.trim() : '';
+  if (
+    normalizedLink &&
+    /(?:place\.naver\.com|map\.naver\.com)/i.test(normalizedLink)
+  ) {
+    return normalizedLink;
+  }
+
+  const slug = title.replace(/\s+/g, '').toLowerCase() || 'unknown';
+  return `${slug}@${lat.toFixed(5)},${lng.toFixed(5)}`;
+}
+
 export function normalizeNaverLocalItem(item) {
   const title = stripHtml(item.title);
   const categoryParts = String(item.category || '').split('>');
@@ -19,7 +32,7 @@ export function normalizeNaverLocalItem(item) {
   const lng = Number(item.mapx) / 1e7;
 
   return {
-    id: item.link || title,
+    id: buildStableCandidateId({ title, lat, lng, link: item.link }),
     name: title,
     category,
     address: item.roadAddress || item.address || '',
@@ -48,6 +61,34 @@ export function normalizeWalkingRoute(route) {
   return NormalizedRouteSchema.parse(route);
 }
 
+function normalizeNaverPathRoute(section) {
+  const distanceMeters = Math.round(section.summary.distance);
+  const durationMinutes = Math.round(section.summary.duration / 1000 / 60);
+  const pathCoords = section.path.map((coord) => ({
+    lng: coord[0],
+    lat: coord[1]
+  }));
+
+  return NormalizedRouteSchema.parse({
+    durationMinutes,
+    distanceMeters,
+    path: pathCoords
+  });
+}
+
+export function normalizeNaverWalkingRoute(rawRoute) {
+  if (
+    rawRoute.code !== 0 ||
+    !rawRoute.route ||
+    !rawRoute.route.traoptimal ||
+    rawRoute.route.traoptimal.length === 0
+  ) {
+    throw new Error('No walking routes found');
+  }
+
+  return normalizeNaverPathRoute(rawRoute.route.traoptimal[0]);
+}
+
 export function normalizeNaverDrivingRoute(rawRoute) {
   if (
     rawRoute.code !== 0 ||
@@ -58,22 +99,7 @@ export function normalizeNaverDrivingRoute(rawRoute) {
     throw new Error('No driving routes found');
   }
 
-  const trafast = rawRoute.route.trafast[0];
-  const distanceMeters = Math.round(trafast.summary.distance);
-  const durationMinutes = Math.round(trafast.summary.duration / 1000 / 60);
-
-  const pathCoords = trafast.path.map((coord) => ({
-    lng: coord[0],
-    lat: coord[1]
-  }));
-
-  const result = {
-    durationMinutes,
-    distanceMeters,
-    path: pathCoords
-  };
-
-  return NormalizedRouteSchema.parse(result);
+  return normalizeNaverPathRoute(rawRoute.route.trafast[0]);
 }
 
 export function mergeCandidateWithRoute(candidate, route, transportMode) {
@@ -84,10 +110,11 @@ export function mergeCandidateWithRoute(candidate, route, transportMode) {
     candidate.id && candidate.name && candidate.category && candidate.address;
   const confidenceBadge = hasAllMetadata ? 'high' : 'medium';
 
+  const hasDetailedPath = Array.isArray(route.path) && route.path.length > 2;
   const providerAttribution =
-    transportMode === 'walk'
-      ? 'Naver Local Search / Walk estimate'
-      : 'Naver Local Search / Naver Maps';
+    hasDetailedPath || transportMode === 'drive'
+      ? 'Naver Local Search / Naver Maps'
+      : 'Naver Local Search / Walk estimate';
 
   const merged = {
     ...candidate,

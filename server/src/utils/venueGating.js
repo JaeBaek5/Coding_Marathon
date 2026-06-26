@@ -56,7 +56,8 @@ export const BAR_SEARCH_KEYWORDS = [
 
 export const CAFE_SEARCH_KEYWORDS = ['카페', '디저트', '베이커리', '커피'];
 
-const DEFAULT_NEARBY_QUERIES = ['맛집', '한식', '일식', '중식', '카페'];
+const RESTAURANT_NEARBY_QUERIES = ['맛집', '한식', '일식', '중식', '양식'];
+const DEFAULT_NEARBY_QUERIES = RESTAURANT_NEARBY_QUERIES;
 const BAR_NEARBY_QUERIES = ['술집', '호프', '주점', '이자카야', '포차', '와인바'];
 const CAFE_NEARBY_QUERIES = ['카페', '디저트', '베이커리', '커피'];
 const HANGOVER_NEARBY_QUERIES = [

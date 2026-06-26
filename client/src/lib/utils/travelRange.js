@@ -1,33 +1,11 @@
-export const TOTAL_TIME_MIN_MINUTES = 20;
-
-export const WALK_METERS_PER_MINUTE = 80;
-export const DRIVE_METERS_PER_MINUTE = 350;
-
-export function computeMaxOneWayTravelMinutes(totalTimeMinutes) {
-  if (
-    typeof totalTimeMinutes !== 'number' ||
-    !Number.isFinite(totalTimeMinutes) ||
-    totalTimeMinutes < TOTAL_TIME_MIN_MINUTES
-  ) {
-    return 0;
-  }
-
-  return Math.floor(totalTimeMinutes / 2);
-}
-
-export function computeTravelRadiusMeters(
-  totalTimeMinutes,
-  transportMode = 'walk'
-) {
-  const oneWayMinutes = computeMaxOneWayTravelMinutes(totalTimeMinutes);
-  if (oneWayMinutes <= 0) {
-    return 0;
-  }
-
-  const metersPerMinute =
-    transportMode === 'drive' ? DRIVE_METERS_PER_MINUTE : WALK_METERS_PER_MINUTE;
-  return oneWayMinutes * metersPerMinute;
-}
+export {
+  TOTAL_TIME_MIN_MINUTES,
+  WALK_METERS_PER_MINUTE,
+  DRIVE_METERS_PER_MINUTE,
+  computeMaxOneWayTravelMinutes,
+  computeTravelRadiusMeters,
+  resolveSearchRadiusMeters
+} from '@shared/contracts/travelRange.js';
 
 export function formatTravelRadiusKm(radiusMeters) {
   if (!radiusMeters || radiusMeters <= 0) {

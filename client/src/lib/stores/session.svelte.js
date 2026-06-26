@@ -1,3 +1,10 @@
+import {
+  loadLikedRestaurants,
+  saveLikedRestaurant as persistLikedRestaurant,
+  removeLikedRestaurant as persistRemoveLikedRestaurant,
+  isRestaurantLiked
+} from '../utils/likedRestaurants.js';
+
 function createSessionStoreInternal() {
   let sessionId = $state(null);
   let status = $state('initial');
@@ -21,6 +28,36 @@ function createSessionStoreInternal() {
   let locationFetchPromise = null;
   let mapTravelTimeMinutes = $state(60);
   let mapTransportMode = $state('walk');
+  let likedRestaurants = $state(loadLikedRestaurants());
+  let feedbackMessage = $state('');
+  let feedbackTimer = null;
+  let mapTravelRefreshTimer = null;
+  let suppressMapTravelRefresh = false;
+
+  function setFeedbackMessage(message) {
+    feedbackMessage = message;
+    if (feedbackTimer) {
+      clearTimeout(feedbackTimer);
+    }
+    if (message) {
+      feedbackTimer = setTimeout(() => {
+        feedbackMessage = '';
+        feedbackTimer = null;
+      }, 2800);
+    }
+  }
+
+  function rememberLikedRestaurant(item) {
+    likedRestaurants = persistLikedRestaurant(item);
+  }
+
+  function removeLikedRestaurant(candidateId) {
+    likedRestaurants = persistRemoveLikedRestaurant(candidateId);
+  }
+
+  function isLikedRestaurant(candidateId) {
+    return isRestaurantLiked(candidateId, likedRestaurants);
+  }
 
   const GEOLOCATION_OPTIONS = {
     timeout: 12000,
@@ -460,6 +497,11 @@ function createSessionStoreInternal() {
                   address: selectedLocation.address
                 }
               : null,
+          likedProfiles: likedRestaurants.map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category || ''
+          })),
           now: new Date().toISOString()
         })
       });
@@ -487,7 +529,7 @@ function createSessionStoreInternal() {
   }
 
   async function submitAnswersWithPayload(answerPayload) {
-    if (!sessionId) return;
+    if (!sessionId) return { ok: false };
     loading = true;
     error = null;
 
@@ -500,21 +542,24 @@ function createSessionStoreInternal() {
       });
 
       const data = await response.json();
-      if (response.ok || data.status) {
+      if (response.ok && data.status !== 'error') {
         handleApiResponse(data);
-      } else {
-        error = {
-          code: data.code || 'PROVIDER_ERROR',
-          message: data.message || '답변 처리 중 문제가 발생했습니다.'
-        };
-        status = 'error';
+        return { ok: true, data, payload: answerPayload };
       }
+
+      error = {
+        code: data.code || 'PROVIDER_ERROR',
+        message: data.message || '답변 처리 중 문제가 발생했습니다.'
+      };
+      status = 'error';
+      return { ok: false };
     } catch {
       error = {
         code: 'PROVIDER_ERROR',
         message: '서버와 연결할 수 없습니다. 잠시 후 다시 시도하세요.'
       };
       status = 'error';
+      return { ok: false };
     } finally {
       await finalizeProgressSnapshot(sessionId);
       loading = false;
@@ -525,10 +570,44 @@ function createSessionStoreInternal() {
     return submitAnswersWithPayload(answers);
   }
 
-  function submitFeedback(action, candidateId) {
+  async function submitFeedback(action, candidateId) {
     return submitAnswersWithPayload({
       action: String(action || '').toLowerCase(),
       ...(candidateId ? { candidateId } : {})
+    });
+  }
+
+  function scheduleMapTravelRefresh() {
+    if (suppressMapTravelRefresh || status !== 'results' || !sessionId || loading) {
+      return;
+    }
+
+    if (mapTravelRefreshTimer) {
+      clearTimeout(mapTravelRefreshTimer);
+    }
+
+    mapTravelRefreshTimer = setTimeout(() => {
+      mapTravelRefreshTimer = null;
+      void applyMapTravelSettings();
+    }, 700);
+  }
+
+  async function applyMapTravelSettings() {
+    if (!sessionId || loading || status !== 'results') {
+      return { ok: false };
+    }
+
+    answers = {
+      ...answers,
+      totalTimeMinutes: mapTravelTimeMinutes,
+      transportMode: mapTransportMode
+    };
+
+    return submitAnswersWithPayload({
+      action: 'travelPreference',
+      mapRefresh: true,
+      totalTimeMinutes: mapTravelTimeMinutes,
+      transportMode: mapTransportMode
     });
   }
 
@@ -554,7 +633,14 @@ function createSessionStoreInternal() {
       results = data.results || [];
       displayMode = data.displayMode || 'single';
       activeResultIndex = 0;
-    displayMode = 'single';
+      suppressMapTravelRefresh = true;
+      if (Number.isFinite(Number(answers.totalTimeMinutes))) {
+        mapTravelTimeMinutes = Number(answers.totalTimeMinutes);
+      }
+      if (answers.transportMode === 'walk' || answers.transportMode === 'drive') {
+        mapTransportMode = answers.transportMode;
+      }
+      suppressMapTravelRefresh = false;
     } else if (data.status === 'error') {
       error = {
         code: data.code,
@@ -649,7 +735,11 @@ function createSessionStoreInternal() {
     },
     set mapTravelTimeMinutes(val) {
       const minutes = Number(val);
-      mapTravelTimeMinutes = Number.isFinite(minutes) ? minutes : mapTravelTimeMinutes;
+      if (!Number.isFinite(minutes)) {
+        return;
+      }
+      mapTravelTimeMinutes = minutes;
+      scheduleMapTravelRefresh();
     },
     get mapTransportMode() {
       return mapTransportMode;
@@ -657,7 +747,14 @@ function createSessionStoreInternal() {
     set mapTransportMode(val) {
       if (val === 'walk' || val === 'drive') {
         mapTransportMode = val;
+        scheduleMapTravelRefresh();
       }
+    },
+    get likedRestaurants() {
+      return likedRestaurants;
+    },
+    get feedbackMessage() {
+      return feedbackMessage;
     },
     get locationSummary() {
       return formatLocationSummary(userLocation);
@@ -672,7 +769,11 @@ function createSessionStoreInternal() {
     submitQuery,
     submitAnswers,
     submitFeedback,
-    submitAnswersWithPayload
+    submitAnswersWithPayload,
+    rememberLikedRestaurant,
+    removeLikedRestaurant,
+    isLikedRestaurant,
+    setFeedbackMessage
   };
 }
 

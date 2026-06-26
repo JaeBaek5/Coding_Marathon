@@ -16,8 +16,12 @@
     session.submitFeedback('dislike', item.id);
   }
 
-  function onLike(item) {
-    session.submitFeedback('like', item.id);
+  async function onLike(item) {
+    const result = await session.submitFeedback('like', item.id);
+    if (result?.ok) {
+      session.rememberLikedRestaurant(item);
+      session.setFeedbackMessage(`"${item.name}"을(를) 저장했습니다.`);
+    }
   }
 
   function isTruthyText(value) {
@@ -43,9 +47,13 @@
         추천 결과가 없습니다.
       {/if}
     </p>
+    {#if session.feedbackMessage}
+      <p class="feedback-toast" role="status">{session.feedbackMessage}</p>
+    {/if}
   </div>
 
-  <div class="results-grid">
+  <div class="results-scroll">
+    <div class="results-grid">
     {#each session.results as item, i}
       <div
         class="result-card card {session.activeResultIndex === i ? 'active' : ''}"
@@ -61,6 +69,27 @@
             <span class="category">{item.category}</span>
           </div>
         </div>
+
+        {#if item.mainPhoto || item.menuBoardPhoto}
+          <div class="photo-grid">
+            {#if item.mainPhoto}
+              <img
+                class="hero-photo"
+                src={item.mainPhoto}
+                alt={`${item.name} 대표 사진`}
+                loading="lazy"
+              />
+            {/if}
+            {#if item.menuBoardPhoto}
+              <img
+                class="menu-photo"
+                src={item.menuBoardPhoto}
+                alt={`${item.name} 메뉴판`}
+                loading="lazy"
+              />
+            {/if}
+          </div>
+        {/if}
 
         <p class="address">{item.address}</p>
 
@@ -116,39 +145,19 @@
           </div>
         {/if}
 
-        {#if item.mainPhoto || item.menuBoardPhoto || (item.menuItems?.length || 0) > 0}
+        {#if (item.menuItems?.length || 0) > 0}
           <div class="media-section">
-            <div class="card-section-title">지도/메뉴</div>
-
-            {#if item.mainPhoto}
-              <img
-                class="media-thumb"
-                src={item.mainPhoto}
-                alt={`${item.name} 대표 사진`}
-                loading="lazy"
-              />
-            {/if}
-            {#if item.menuBoardPhoto}
-              <img
-                class="media-thumb"
-                src={item.menuBoardPhoto}
-                alt={`${item.name} 메뉴판 사진`}
-                loading="lazy"
-              />
-            {/if}
-
-            {#if item.menuItems?.length}
-              <ul class="menu-list">
-                {#each item.menuItems.slice(0, 3) as menu}
-                  <li>
-                    <span class="menu-name">{menu.name}</span>
-                    {#if isTruthyText(menu.price)}
-                      <span class="menu-price">{menu.price}</span>
-                    {/if}
-                  </li>
-                {/each}
-              </ul>
-            {/if}
+            <div class="card-section-title">대표 메뉴</div>
+            <ul class="menu-list">
+              {#each item.menuItems.slice(0, 5) as menu}
+                <li>
+                  <span class="menu-name">{menu.name}</span>
+                  {#if isTruthyText(menu.price)}
+                    <span class="menu-price">{menu.price}</span>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
           </div>
         {/if}
 
@@ -183,16 +192,17 @@
             싫어요
           </button>
           <button
-            class="button-primary feedback-btn"
+            class="button-primary feedback-btn {session.isLikedRestaurant(item.id) ? 'liked' : ''}"
             type="button"
             disabled={session.loading}
             onclick={() => onLike(item)}
           >
-            좋아요
+            {session.isLikedRestaurant(item.id) ? '저장됨' : '좋아요'}
           </button>
         </div>
       </div>
     {/each}
+    </div>
   </div>
 
   <button type="button" class="button-outline reset-btn" onclick={() => session.reset()}>
@@ -204,13 +214,24 @@
   .results-list-container {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-lg);
+    gap: var(--spacing-md);
     width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .results-header {
     border-bottom: 1px solid var(--color-hairline);
     padding-bottom: var(--spacing-sm);
+    flex: 0 0 auto;
+  }
+
+  .results-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: var(--spacing-xs);
   }
 
   .title {
@@ -224,6 +245,16 @@
     font-size: 14px;
     color: var(--color-mute);
     margin-top: var(--spacing-xs);
+  }
+
+  .feedback-toast {
+    margin-top: var(--spacing-sm);
+    padding: 8px 12px;
+    border-radius: var(--rounded-sm);
+    background: color-mix(in oklch, var(--color-primary) 12%, var(--color-surface-card));
+    color: var(--color-primary);
+    font-size: 13px;
+    font-weight: 600;
   }
 
   .results-grid {
@@ -379,17 +410,26 @@
     flex-shrink: 0;
   }
 
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--spacing-xs);
+  }
+
+  .hero-photo,
+  .menu-photo {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--rounded-sm);
+    border: 1px solid var(--color-hairline);
+    background-color: var(--color-surface-bone);
+  }
+
   .media-section {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
-  }
-
-  .media-thumb {
-    width: 100%;
-    max-width: 360px;
-    border-radius: var(--rounded-sm);
-    border: 1px solid var(--color-hairline);
   }
 
   .menu-list {
@@ -454,6 +494,12 @@
     flex: 1;
   }
 
+  .feedback-btn.liked {
+    background: color-mix(in oklch, var(--color-primary) 18%, var(--color-surface-card));
+    color: var(--color-primary);
+    border: 1px solid color-mix(in oklch, var(--color-primary) 35%, transparent);
+  }
+
   .confidence-high {
     color: var(--color-badge-success);
     border-color: var(--color-badge-success);
@@ -471,6 +517,7 @@
     width: 100%;
     height: 48px;
     font-size: 16px;
-    margin-top: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+    flex: 0 0 auto;
   }
 </style>

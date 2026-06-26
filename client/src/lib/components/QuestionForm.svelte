@@ -20,6 +20,9 @@
     'desiredFoods'
   ]);
 
+  // 복수 선택(토글)이 가능한 배열 필드
+  const MULTI_SELECT_FIELDS = new Set(['desiredFoods', 'excludedFoods']);
+
   function resolveOptions(question) {
     if (question.options?.length) {
       return question.options;
@@ -38,17 +41,31 @@
     return left === right;
   }
 
+  function toValueList(value) {
+    return Array.isArray(value) ? value : [value];
+  }
+
   function isOptionSelected(field, value) {
+    if (MULTI_SELECT_FIELDS.has(field)) {
+      const current = Array.isArray(session.answers[field])
+        ? session.answers[field]
+        : [];
+      return toValueList(value).every((entry) => current.includes(entry));
+    }
     return valuesEqual(field, session.answers[field], value);
   }
 
   function selectOption(field, value) {
-    if (field === 'excludedFoods') {
-      session.answers.excludedFoods = Array.isArray(value) ? [...value] : [value];
-      return;
-    }
-    if (field === 'desiredFoods') {
-      session.answers.desiredFoods = Array.isArray(value) ? [...value] : [value];
+    if (MULTI_SELECT_FIELDS.has(field)) {
+      const current = Array.isArray(session.answers[field])
+        ? [...session.answers[field]]
+        : [];
+      const incoming = toValueList(value);
+      const allSelected = incoming.every((entry) => current.includes(entry));
+
+      session.answers[field] = allSelected
+        ? current.filter((entry) => !incoming.includes(entry))
+        : [...current, ...incoming.filter((entry) => !current.includes(entry))];
       return;
     }
     session.answers[field] = value;
@@ -96,7 +113,7 @@
     <h3 class="title">{isFoodCravingStep ? '음식 맞추기' : '추가 질문'}</h3>
     <p class="subtitle">
       {#if isFoodCravingStep}
-        AI가 지금 상태에 맞는 음식 3가지를 골라봤어요. 마음에 드는 걸 선택해 주세요.
+        AI가 지금 상태에 맞는 음식을 골라봤어요. 여러 개 선택할 수 있어요.
       {:else}
         입력하지 않은 항목은 기본값으로 진행됩니다.
       {/if}
@@ -107,7 +124,12 @@
     {#each session.questions as q}
       {@const options = resolveOptions(q)}
       <div class="question-item">
-        <label class="question-label" for="input-{q.field}">{q.label}</label>
+        <label class="question-label" for="input-{q.field}">
+          {q.label}
+          {#if MULTI_SELECT_FIELDS.has(q.field) && options.length}
+            <span class="multi-hint">복수 선택 가능</span>
+          {/if}
+        </label>
 
         {#if isFoodCravingStep && q.avoidSuggestions?.length}
           <div class="avoid-foods">
@@ -126,6 +148,7 @@
               <button
                 type="button"
                 class="pill-select {isOptionSelected(q.field, opt.value) ? 'selected' : ''}"
+                aria-pressed={isOptionSelected(q.field, opt.value)}
                 onclick={() => selectOption(q.field, opt.value)}
               >
                 {opt.label}
@@ -277,6 +300,18 @@
     font-size: 14px;
     font-weight: 600;
     color: var(--color-charcoal);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  .multi-hint {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-primary);
+    background: color-mix(in oklch, var(--color-primary) 12%, var(--color-surface-card));
+    border-radius: var(--rounded-full);
+    padding: 2px 8px;
   }
 
   .pill-group {

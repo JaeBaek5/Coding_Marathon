@@ -5,15 +5,30 @@
   "questions": [
     {
       "field": "budgetPerPersonKrw",
-      "label": "1인 예산은 얼마인가요?"
+      "label": "1인 예산은 얼마인가요?",
+      "options": [
+        { "value": 10000, "label": "1만원" },
+        { "value": 15000, "label": "1.5만원" },
+        { "value": 20000, "label": "2만원" },
+        { "value": 30000, "label": "3만원" }
+      ]
     },
     {
       "field": "transportMode",
-      "label": "도보로 갈까요, 차로 갈까요?"
+      "label": "도보로 갈까요, 차로 갈까요?",
+      "options": [
+        { "value": "walk", "label": "도보" },
+        { "value": "drive", "label": "차량" }
+      ]
     },
     {
       "field": "vibe",
-      "label": "식사 분위기는 어떤가요?"
+      "label": "식사 분위기는 어떤가요?",
+      "options": [
+        { "value": "캐주얼", "label": "캐주얼" },
+        { "value": "조용한", "label": "조용한" },
+        { "value": "분위기 좋은", "label": "분위기 좋은" }
+      ]
     }
   ]
 }

@@ -6,6 +6,7 @@ import {
   normalizeNaverKeywordLocation,
   normalizeWalkingRoute,
   normalizeNaverDrivingRoute,
+  normalizeNaverWalkingRoute,
   mergeCandidateWithRoute
 } from '../adapters/normalization.js';
 import { estimateWalkingRoute, estimateDrivingRoute } from '../utils/haversine.js';
@@ -56,6 +57,7 @@ describe('Provider Adapters & Mocking Fallback', () => {
     const route = estimateDrivingRoute(34.9698, 127.4763, 34.971, 127.478);
     expect(route.durationMinutes).toBeGreaterThan(0);
     expect(route.distanceMeters).toBeGreaterThan(0);
+    expect(route.path).toHaveLength(2);
     expect(route.path[0]).toEqual({ lat: 34.9698, lng: 127.4763 });
     expect(route.path[1]).toEqual({ lat: 34.971, lng: 127.478 });
   });
@@ -75,6 +77,32 @@ describe('Normalization Layer', () => {
     expect(route.distanceMeters).toBeGreaterThan(0);
     expect(route.path).toHaveLength(2);
     expect(route.path[0]).toEqual({ lat: 37.4979, lng: 127.0276 });
+  });
+
+  it('should correctly normalize walking routes from Naver Directions payload', () => {
+    const rawWalkingRoute = {
+      code: 0,
+      route: {
+        traoptimal: [
+          {
+            summary: {
+              distance: 420.2,
+              duration: 360000
+            },
+            path: [
+              [127.0276, 37.4979],
+              [127.0268, 37.498],
+              [127.0282, 37.4981]
+            ]
+          }
+        ]
+      }
+    };
+
+    const route = normalizeNaverWalkingRoute(rawWalkingRoute);
+    expect(route.durationMinutes).toBe(6);
+    expect(route.distanceMeters).toBe(420);
+    expect(route.path).toHaveLength(3);
   });
 
   it('should correctly normalize driving routes with integer minutes and meters', () => {

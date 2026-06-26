@@ -1,5 +1,5 @@
 <script>
-  const { onReset } = $props();
+  const { onReset, likedCount = 0, onOpenLiked = () => {} } = $props();
 </script>
 
 <header class="nav-bar">
@@ -9,6 +9,14 @@
       <h1 class="logo-text">머먹</h1>
     </div>
     <div class="actions">
+      <button
+        type="button"
+        class="button-outline header-liked-btn"
+        onclick={onOpenLiked}
+        aria-label="저장한 식당 보기"
+      >
+        저장한 식당{#if likedCount > 0}<span class="liked-count">{likedCount}</span>{/if}
+      </button>
       <button class="button-outline header-reset-btn" onclick={onReset}>
         처음으로
       </button>
@@ -71,5 +79,34 @@
     height: 36px;
     padding: 0 16px;
     font-size: 14px;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .header-liked-btn {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .liked-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--rounded-full);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: 11px;
+    font-weight: 700;
   }
 </style>

@@ -1,6 +1,8 @@
 .env
 *.env
 *.local
+deploy/cloud-run.env
+.firebase/
 .omc/
 .omo/
 .serena/

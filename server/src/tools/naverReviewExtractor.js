@@ -282,11 +282,22 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
       reviewSnippets: [],
       extractionMethod: 'unavailable',
       fetchedAt,
-      error: 'Could not resolve Naver place ID'
+      error: 'Could not resolve Naver place ID',
+      mainPhoto: null,
+      menuBoardPhoto: null,
+      menuItems: []
     });
   }
 
-  const page = await fetchReviewPage(placeId, { fetchFn });
+  const [page, enrichment] = await Promise.all([
+    fetchReviewPage(placeId, { fetchFn }),
+    extractNaverHomeEnrichment(placeId, placeName ?? '', { fetchFn })
+  ]);
+  const enrichmentFields = {
+    mainPhoto: enrichment.mainPhoto ?? null,
+    menuBoardPhoto: enrichment.menuBoardPhoto ?? null,
+    menuItems: enrichment.menuItems ?? []
+  };
 
   if (!page) {
     return ReviewExtractionOutputSchema.parse({
@@ -302,7 +313,8 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
       reviewSnippets: [],
       extractionMethod: 'unavailable',
       fetchedAt,
-      error: 'Could not fetch review page'
+      error: 'Could not fetch review page',
+      ...enrichmentFields
     });
   }
 
@@ -325,7 +337,8 @@ export async function extractNaverReviews(opts, { fetchFn = fetch } = {}) {
     reviewSnippets,
     extractionMethod: 'static-hydration',
     fetchedAt,
-    error: null
+    error: null,
+    ...enrichmentFields
   });
 }
 

@@ -3,6 +3,7 @@ import { createAgentChatCompletion } from '../../llm/client.js';
 import { AlephFoodCravingInferenceSchema } from '../../../../shared/contracts/schemas.js';
 import {
   buildFoodCatalogPromptSummary,
+  buildRelatedFoodOptionsForSuggestions,
   getFoodById,
   resolveFoodId,
   validateFoodCravingSuggestions
@@ -21,6 +22,8 @@ const FOOD_CRAVING_SYSTEM_PROMPT = [
   'Each positive suggestion needs food (catalog id), label (friendly Korean button text), score (50-100 craving fit).',
   'Also return 2-4 avoidSuggestions for catalog foods that clearly mismatch the state (score 0-49).',
   'Avoid suggestions need catalog food id, label (short Korean), and score below 50.',
+  'Prefer everyday Korean foods (hangover soup, noodles, rice, grilled meat, stew).',
+  'Do not suggest southeast_asian catalog foods unless the user clearly wants Vietnamese/Thai cuisine.',
   'Infer hangover, stress, comfort food, light vs heavy, hot soup, grilled meat, noodles, etc. from context.',
   'Never invent budget, transport, coordinates, or party details.',
   'For hangover recovery, suggest soup/noodle recovery catalog foods and avoid fried chicken, pizza, greasy foods.',
@@ -180,13 +183,38 @@ export function buildFoodCravingQuestion(inference) {
     ? `지금 상태라면 이런 음식은 어떠세요? (${inference.stateSummary})`
     : '지금 상태라면 이런 음식은 어떠세요?';
 
+  const primaryOptions = [...inference.suggestions]
+    .sort((left, right) => right.score - left.score)
+    .map((item) => ({
+      value: item.food,
+      label: item.label
+    }));
+
+  const relatedOptions = buildRelatedFoodOptionsForSuggestions(
+    inference.suggestions,
+    { maxExtra: 3 }
+  ).map((item) => ({
+    value: item.value,
+    label: item.label
+  }));
+
+  const seen = new Set();
+  const options = [];
+  for (const option of [...primaryOptions, ...relatedOptions]) {
+    if (seen.has(option.value)) {
+      continue;
+    }
+    seen.add(option.value);
+    options.push(option);
+    if (options.length >= 6) {
+      break;
+    }
+  }
+
   return {
     field: 'desiredFoods',
     label,
-    options: inference.suggestions.map((item) => ({
-      value: item.food,
-      label: item.label
-    })),
+    options,
     avoidSuggestions: inference.avoidSuggestions.map((item) => ({
       food: item.food,
       label: item.label,

@@ -215,6 +215,46 @@ describe('extractNaverReviews', () => {
     return `<html><script>window.__APOLLO_STATE__=${JSON.stringify(state)}</script></html>`;
   }
 
+  function buildHomePageHtml({ mainPhoto, menuBoardPhoto, menuItems = [] }) {
+    const state = {
+      'Photo:main': {
+        __typename: 'PlaceDetailTopPhotoItem',
+        title: '외부',
+        origin: mainPhoto
+      }
+    };
+    if (menuBoardPhoto) {
+      state['Photo:menu'] = {
+        __typename: 'PlaceDetailTopPhotoItem',
+        title: '메뉴판',
+        origin: menuBoardPhoto
+      };
+    }
+    menuItems.forEach((menu, index) => {
+      state[`Menu:${index}`] = {
+        __typename: 'Menu',
+        name: menu.name,
+        price: menu.price ?? null
+      };
+    });
+    return `<html><script>window.__APOLLO_STATE__=${JSON.stringify(state)}</script></html>`;
+  }
+
+  function createReviewAndHomeFetchMock({ reviewHtml, homeHtml }) {
+    return vi.fn().mockImplementation((url) => {
+      if (String(url).includes('/home')) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(homeHtml)
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        text: () => Promise.resolve(reviewHtml)
+      });
+    });
+  }
+
   it('returns ReviewExtractionOutputSchema-valid output on successful static extraction', async () => {
     const reviews = Array.from({ length: 12 }, (_, i) => ({
       body: `리뷰 내용 ${i}: ${i < 3 ? '아쉬운 점이 있어요' : '정말 맛있어요 재방문 확정'}`,
@@ -305,6 +345,25 @@ describe('extractNaverReviews', () => {
     );
 
     expect(result.reviews.length).toBeLessThanOrEqual(20);
+  });
+
+  it('includes home enrichment photos and menu items when available', async () => {
+    const reviewHtml = buildReviewPageHtml([{ body: '맛있어요', rating: 5 }]);
+    const homeHtml = buildHomePageHtml({
+      mainPhoto: 'https://example.com/main.jpg',
+      menuBoardPhoto: 'https://example.com/menu.jpg',
+      menuItems: [{ name: '삼겹살', price: '15000' }]
+    });
+    const mockFetch = createReviewAndHomeFetchMock({ reviewHtml, homeHtml });
+
+    const result = await extractNaverReviews(
+      { placeUrl: 'https://m.place.naver.com/restaurant/9999/review/visitor' },
+      { fetchFn: mockFetch }
+    );
+
+    expect(result.mainPhoto).toBe('https://example.com/main.jpg');
+    expect(result.menuBoardPhoto).toBe('https://example.com/menu.jpg');
+    expect(result.menuItems).toEqual([{ name: '삼겹살', price: '15000' }]);
   });
 
   it('returns extractionMethod unavailable when fetch fails', async () => {

@@ -21,7 +21,7 @@ export const ALEPH_FOOD_INFERENCE_TIMEOUT_MS =
 export const SLOT_AI_TIMEOUT_MS = Number(process.env.SLOT_AI_TIMEOUT_MS) || 2000;
 export const GIMEL_LLM_TIMEOUT_MS = Number(process.env.GIMEL_LLM_TIMEOUT_MS) || 3500;
 
-export const BET_ROUTE_CANDIDATE_LIMIT_FAST = 10;
+export const BET_ROUTE_CANDIDATE_LIMIT_FAST = 20;
 export const BET_ROUTE_CONCURRENCY_FAST = 6;
 export const BET_REVIEW_ENRICH_LIMIT_FAST = 3;
 export const BET_REVIEW_TIMEOUT_MS_FAST = 5000;

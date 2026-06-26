@@ -36,4 +36,34 @@ export class NaverDirectionsAdapter {
 
     return response.json();
   }
+
+  async getWalkingRoute(startLat, startLng, goalLat, goalLng) {
+    const { clientId, clientSecret } = getMapsCredentials();
+    if (!clientId || !clientSecret) {
+      throw new Error(
+        'NAVER_CLIENT_ID/SECRET 없음 (Naver Cloud Directions API 키 필요)'
+      );
+    }
+
+    const url = new URL(
+      'https://naveropenapi.apigw.ntruss.com/map-direction/v1/walking'
+    );
+    url.searchParams.append('start', `${startLng},${startLat}`);
+    url.searchParams.append('goal', `${goalLng},${goalLat}`);
+
+    const response = await fetch(url, {
+      headers: {
+        'X-NCP-APIGW-API-KEY-ID': clientId,
+        'X-NCP-APIGW-API-KEY': clientSecret
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `NAVER Directions walking directions failed: ${response.status} ${response.statusText}`
+      );
+    }
+
+    return response.json();
+  }
 }

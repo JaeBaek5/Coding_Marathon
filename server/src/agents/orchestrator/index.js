@@ -90,6 +90,23 @@ function toFeedbackResponse(answers) {
   };
 }
 
+function isTravelPreferencePayload(answers) {
+  if (!answers || typeof answers !== 'object') {
+    return false;
+  }
+
+  if (answers.action !== 'travelPreference' || answers.mapRefresh !== true) {
+    return false;
+  }
+
+  return (
+    (typeof answers.totalTimeMinutes === 'number' &&
+      Number.isFinite(answers.totalTimeMinutes)) ||
+    answers.transportMode === 'walk' ||
+    answers.transportMode === 'drive'
+  );
+}
+
 function resolveDisplayMode(dislikeCount) {
   return dislikeCount >= TRIPLE_DISPLAY_DISLIKE_COUNT ? 'triple' : 'single';
 }
@@ -495,6 +512,10 @@ export class OrchestratorAgent {
       return this.applyFeedback(session, feedback);
     }
 
+    if (isTravelPreferencePayload(answers)) {
+      return this.applyTravelPreference(session, answers);
+    }
+
     const nextRound = session.turnCount + 1;
     resetSessionProgress(sessionId);
     setSessionProgress(sessionId, {
@@ -562,6 +583,32 @@ export class OrchestratorAgent {
       excludeCandidateIds: session.dislikedCandidateIds || [],
       dislikedProfiles: session.dislikedCandidateProfiles || [],
       resetFeedbackStage: wasRefining
+    });
+  }
+
+  async applyTravelPreference(session, answers) {
+    const slots = {
+      ...(session.slots || {}),
+      ...(typeof answers.totalTimeMinutes === 'number' &&
+      Number.isFinite(answers.totalTimeMinutes)
+        ? { totalTimeMinutes: answers.totalTimeMinutes }
+        : {}),
+      ...(answers.transportMode === 'walk' || answers.transportMode === 'drive'
+        ? { transportMode: answers.transportMode }
+        : {})
+    };
+
+    this.dependencies.sessions.update(session.id, { slots });
+    resetSessionProgress(session.id);
+    setSessionProgress(session.id, {
+      phase: 'bet_search',
+      message: '이동 범위 변경 · 식당 다시 검색 중',
+      detail: formatSlotsProgressDetail(slots)
+    });
+
+    return this.runCandidateFlow(session, slots, session.createdAt, {
+      excludeCandidateIds: session.dislikedCandidateIds || [],
+      dislikedProfiles: session.dislikedCandidateProfiles || []
     });
   }
 

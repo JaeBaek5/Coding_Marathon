@@ -14,6 +14,8 @@ Svelte 클라이언트와 Express 백엔드로 구성된 멀티 에이전트 음
 | [docs/MAP_DATA_FLOW.ko.md](docs/MAP_DATA_FLOW.ko.md) | 위치 검색, 프로바이더 어댑터, 경로 흐름, 랭킹 입력값. |
 | [docs/MAP_GROUNDING.ko.md](docs/MAP_GROUNDING.ko.md) | 표준 리뷰 URL, 추출 규칙, 근거 기반(grounded) 사유 제약. |
 | [docs/IMPLEMENTATION_NOTES.ko.md](docs/IMPLEMENTATION_NOTES.ko.md) | 추가 질문 UI·술집/샤브 의도 등 최근 수정 참고 및 재발 시 체크리스트. |
+| [docs/PRESENTATION_PREP.ko.md](docs/PRESENTATION_PREP.ko.md) | SCNU 코딩 마라톤 발표 대비 통합 자료 (데모·Q&A·현재 코드 기준). |
+| [deploy/README.ko.md](deploy/README.ko.md) | Firebase Hosting + Cloud Run 임시 배포 (dodak-01). |
 
 ## 검증 명령어
 

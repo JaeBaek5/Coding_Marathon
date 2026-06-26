@@ -20,7 +20,11 @@
     "test:contract": "vitest run --project server-contract",
     "test:integration": "vitest run --project server-integration",
     "test:e2e": "playwright test",
-    "smoke": "playwright test tests-e2e/smoke.spec.js"
+    "smoke": "playwright test tests-e2e/smoke.spec.js",
+    "build:client": "npm run build --workspace=client",
+    "deploy:cloud-run": "bash scripts/deploy-cloud-run.sh",
+    "deploy:hosting": "bash scripts/deploy-firebase-hosting.sh",
+    "deploy:firebase": "bash scripts/deploy-firebase.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

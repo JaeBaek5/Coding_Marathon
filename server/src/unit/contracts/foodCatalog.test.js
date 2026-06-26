@@ -4,8 +4,10 @@ import {
   FOOD_CATALOG_STATS,
   FOOD_CATEGORIES,
   buildFoodCatalogPromptSummary,
+  buildDesiredFoodOptionsFromScores,
   expandFoodSearchKeywords,
   getDefaultDesiredFoodOptions,
+  inferDesiredFoodOptions,
   listCategoryIds,
   resolveFoodId,
   resolveFoodIdsFromText,
@@ -42,6 +44,27 @@ describe('foodCatalog', () => {
     expect(options.length).toBeGreaterThanOrEqual(6);
     expect(options.map((item) => item.value)).toContain('고기');
     expect(options.map((item) => item.value)).toContain('해장');
+  });
+
+  it('builds desired food options from preference scores and related foods', () => {
+    const options = buildDesiredFoodOptionsFromScores([
+      { food: '국밥', score: 95 },
+      { food: '해장국', score: 88 },
+      { food: '치킨', score: 10 }
+    ]);
+
+    expect(options.map((item) => item.value)).toContain('국밥');
+    expect(options.map((item) => item.value)).toContain('해장국');
+    expect(options.map((item) => item.value)).not.toContain('치킨');
+    expect(options.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('omits southeast asian intent from fallback unless query mentions it', () => {
+    const defaultOptions = inferDesiredFoodOptions({}, '스트레스 받아서 기운 없어');
+    expect(defaultOptions.map((item) => item.value)).not.toContain('동남아');
+
+    const vietnameseOptions = inferDesiredFoodOptions({}, '베트남 쌀국수 먹고 싶어');
+    expect(vietnameseOptions.map((item) => item.value)).toContain('동남아');
   });
 
   it('builds LLM catalog summary by category', () => {

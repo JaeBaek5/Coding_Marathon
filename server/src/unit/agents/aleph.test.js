@@ -181,7 +181,7 @@ describe('Aleph Agent', () => {
       expect(result.status).toBe('questions');
       expect(result.missingFields).toEqual(['desiredFoods']);
       expect(result.questions).toHaveLength(1);
-      expect(result.questions[0].options).toHaveLength(3);
+      expect(result.questions[0].options.length).toBeGreaterThanOrEqual(3);
       expect(result.questions[0].options[0].label).toBe('따뜻한 국밥');
       expect(result.questions[0].avoidSuggestions).toHaveLength(2);
       expect(result.currentState.foodPreferenceScores).toHaveLength(5);

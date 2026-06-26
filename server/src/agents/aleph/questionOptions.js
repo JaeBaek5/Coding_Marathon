@@ -131,6 +131,15 @@ function resolveQuestionOptions({
   userQuery,
   fieldSchema
 }) {
+  if (
+    field === 'desiredFoods' &&
+    Array.isArray(partialSlots.foodPreferenceScores) &&
+    partialSlots.foodPreferenceScores.length > 0 &&
+    baseOptions?.length >= 2
+  ) {
+    return baseOptions;
+  }
+
   if (llmOptions.length >= 2) {
     return llmOptions;
   }

@@ -167,8 +167,131 @@ export function getDefaultDesiredFoodOptions() {
   }));
 }
 
+const SOUTHEAST_ASIAN_QUERY_PATTERN =
+  /베트남|쌀국수|분짜|태국|팟타이|동남아|쌀국|반미|똠얌/;
+
+function queryMentionsSoutheastAsian(query = '') {
+  return SOUTHEAST_ASIAN_QUERY_PATTERN.test(query);
+}
+
+function queryMentionsDessert(query = '') {
+  return /디저트|카페|커피|케이크|빵|브런치/.test(query);
+}
+
+function toDesiredFoodOption(item) {
+  return {
+    value: item.id,
+    label: item.label,
+    category: item.category
+  };
+}
+
+export function buildDesiredFoodOptionsFromScores(
+  foodPreferenceScores = [],
+  { maxOptions = 8 } = {}
+) {
+  const scores = [...foodPreferenceScores]
+    .filter((item) => Number(item.score) >= 50)
+    .sort((left, right) => right.score - left.score);
+
+  const options = [];
+  const seen = new Set();
+
+  const pushFood = (foodId) => {
+    const item = getFoodById(foodId);
+    if (!item || seen.has(item.id)) {
+      return;
+    }
+    seen.add(item.id);
+    options.push(toDesiredFoodOption(item));
+  };
+
+  for (const entry of scores) {
+    pushFood(entry.food);
+  }
+
+  const topCategories = [
+    ...new Set(
+      scores
+        .slice(0, 3)
+        .map((entry) => getFoodById(entry.food)?.category)
+        .filter(Boolean)
+    )
+  ];
+
+  for (const categoryId of topCategories) {
+    for (const item of listFoodsByCategory(categoryId)) {
+      if (options.length >= maxOptions) {
+        break;
+      }
+      if (!item.intentOnly) {
+        pushFood(item.id);
+      }
+    }
+  }
+
+  return options.slice(0, maxOptions);
+}
+
+export function buildRelatedFoodOptionsForSuggestions(
+  suggestions = [],
+  { maxExtra = 3 } = {}
+) {
+  const categories = new Set(
+    suggestions
+      .map((entry) => getFoodById(entry.food)?.category)
+      .filter(Boolean)
+  );
+  const seen = new Set(suggestions.map((entry) => entry.food));
+  const related = [];
+
+  for (const categoryId of categories) {
+    for (const item of listFoodsByCategory(categoryId)) {
+      if (related.length >= maxExtra) {
+        break;
+      }
+      if (item.intentOnly || seen.has(item.id)) {
+        continue;
+      }
+      if (
+        item.category === 'southeast_asian' &&
+        !categories.has('southeast_asian')
+      ) {
+        continue;
+      }
+      seen.add(item.id);
+      related.push(toDesiredFoodOption(item));
+    }
+  }
+
+  return related;
+}
+
+function filterFallbackIntentOptions(query = '') {
+  return getDefaultDesiredFoodOptions().filter((item) => {
+    if (item.category === 'southeast_asian') {
+      return queryMentionsSoutheastAsian(query);
+    }
+    if (item.category === 'dessert') {
+      return queryMentionsDessert(query);
+    }
+    return true;
+  });
+}
+
 export function inferDesiredFoodOptions(partialSlots = {}, userQuery = '') {
-  const query = `${userQuery} ${(partialSlots.desiredFoods || []).join(' ')}`;
+  const query = `${userQuery} ${(partialSlots.desiredFoods || []).join(' ')}`.trim();
+  const scores = Array.isArray(partialSlots.foodPreferenceScores)
+    ? partialSlots.foodPreferenceScores
+    : [];
+
+  if (scores.length > 0) {
+    const fromScores = buildDesiredFoodOptionsFromScores(scores);
+    if (fromScores.length >= 2) {
+      return fromScores;
+    }
+  }
+
   const matched = resolveFoodIdsFromText(query);
 
   if (matched.length > 0) {
@@ -177,18 +300,14 @@ export function inferDesiredFoodOptions(partialSlots = {}, userQuery = '') {
       const sameCategory = listFoodsByCategory(primary.category)
         .filter((item) => !item.intentOnly || item.id === primary.id)
         .slice(0, 6)
-        .map((item) => ({
-          value: item.id,
-          label: item.label,
-          category: item.category
-        }));
+        .map((item) => toDesiredFoodOption(item));
       if (sameCategory.length >= 2) {
         return sameCategory;
       }
     }
   }
 
-  return getDefaultDesiredFoodOptions();
+  return filterFallbackIntentOptions(query);
 }
 
 export function getExcludedFoodOptions() {

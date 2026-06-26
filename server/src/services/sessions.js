@@ -16,6 +16,7 @@ class SessionStore {
       likedCandidateIds: [],
       dislikedCandidateIds: [],
       dislikedCandidateProfiles: [],
+      savedLikedProfiles: [],
       currentRecommendationIndex: 0,
       candidates: [],
       candidatePool: [],
@@ -78,6 +79,9 @@ class SessionStore {
     }
     if (updates.dislikedCandidateProfiles !== undefined) {
       session.dislikedCandidateProfiles = updates.dislikedCandidateProfiles;
+    }
+    if (updates.savedLikedProfiles !== undefined) {
+      session.savedLikedProfiles = updates.savedLikedProfiles;
     }
     if (updates.pendingRefinement !== undefined) {
       session.pendingRefinement = updates.pendingRefinement;

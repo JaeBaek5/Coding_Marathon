@@ -47,6 +47,9 @@ export async function enrichCandidatesWithReviews(
         reviewSummary: scraped.reviewSummary ?? candidate.reviewSummary ?? null,
         reviewSnippets: scraped.reviewSnippets ?? [],
         reviews: scraped.reviews ?? [],
+        mainPhoto: scraped.mainPhoto ?? null,
+        menuBoardPhoto: scraped.menuBoardPhoto ?? null,
+        menuItems: Array.isArray(scraped.menuItems) ? scraped.menuItems : [],
         reviewExtraction: scraped
       };
     }

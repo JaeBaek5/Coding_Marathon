@@ -35,7 +35,7 @@ describe('foodCravingInference', () => {
     ).toBe(false);
   });
 
-  it('builds a three-option desiredFoods question', () => {
+  it('builds a scored desiredFoods question with related options', () => {
     const question = buildFoodCravingQuestion({
       stateSummary: '피곤한 상태',
       suggestions: [
@@ -50,7 +50,8 @@ describe('foodCravingInference', () => {
     });
 
     expect(question.field).toBe('desiredFoods');
-    expect(question.options).toHaveLength(3);
+    expect(question.options.length).toBeGreaterThanOrEqual(3);
+    expect(question.options.map((item) => item.value)).toContain('국밥');
     expect(question.avoidSuggestions).toHaveLength(2);
     expect(question.label).toContain('피곤한 상태');
   });
